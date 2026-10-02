@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ICEBREAKER</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="viewport">
+    <div id="stage">
+      <canvas id="scene"></canvas>
+      <div id="edge-flash"></div>
+
+      <header class="topbar">
+        <div class="brand">
+          <svg class="brand-icon" viewBox="0 0 40 40" aria-hidden="true">
+            <polygon points="20,2 36,11 36,29 20,38 4,29 4,11" fill="none" stroke="#65f5ed" stroke-width="2" />
+            <path d="M22 9 L13 22 H20 L17 31 L27 17 H20 Z" fill="#65f5ed" />
+          </svg>
+          <div>
+            <div class="wordmark">ICEBREAKER</div>
+            <div class="brand-sub">TYPE TO BREACH.</div>
+          </div>
+        </div>
+        <div class="top-center">
+          <div class="sector">SECTOR <em id="sector-no">1</em> / 3</div>
+          <div class="sector-sub" id="sector-sub">CORPORATE MESH / OUTER RING</div>
+        </div>
+        <div class="trace">
+          <div class="trace-label"><span>[ TRACE ]</span><b id="trace-val">0<small>%</small></b></div>
+          <div class="trace-track" id="trace-track"></div>
+          <div class="trace-note" id="trace-note">SIGNAL EXPOSURE / STABLE</div>
+        </div>
+      </header>
+      <div class="topline"></div>
+
+      <section class="chain">
+        <div class="label">[ CHAIN ]</div>
+        <div class="number" id="chain">0</div>
+        <div class="caption" id="chain-caption">CONTINUOUS SIGNAL</div>
+        <div class="overclock">
+          <div class="label small">OVERCLOCK</div>
+          <div class="stages" id="oc-stages"><i></i><i></i><i></i></div>
+          <div class="oc-name" id="oc-name">0 / IDLE</div>
+        </div>
+      </section>
+
+      <section class="depth">
+        <div class="ruler"></div>
+        <div>
+          <div class="eyebrow">DIVE DEPTH</div>
+          <div class="depth-value"><span id="depth">0</span> <small>m</small></div>
+          <div class="depth-tiny" id="depth-sub">▾ OUTER NETWORK</div>
+        </div>
+      </section>
+
+      <section class="enemy-info">
+        <div class="id" id="ice-id">[ ICE // FW-001 ]</div>
+        <h2>FIREWALL</h2>
+        <div class="kind jp" id="ice-kind">標準防壁 / 第 01 層</div>
+        <div class="integrity"><span>LAYER INTEGRITY</span><span id="integrity-val">100%</span></div>
+        <div class="integrity-line"><i id="integrity-bar"></i></div>
+        <div class="enemy-log" id="enemy-log"></div>
+      </section>
+
+      <div class="ice-index">
+        <span id="layer-index">◆ LAYER 01 / 05</span>
+        <span class="pill" id="ice-status">AWAITING INPUT</span>
+      </div>
+
+      <section class="input-panel" id="input-panel">
+        <div class="input-head">
+          <span class="input-label" id="input-label">INPUT // 001</span>
+          <span class="next">NEXT <span class="jp" id="next-word"></span><span id="next-guide"></span></span>
+        </div>
+        <div class="input-body">
+          <div class="word jp" id="word"></div>
+          <div class="reading jp" id="reading"></div>
+          <div class="romaji" id="romaji"></div>
+        </div>
+        <div class="input-meta">
+          <span id="mode-label">JP / ROMAJI　|　IME OFF</span>
+          <span class="progress">DECRYPTING // <span id="progress-text">00 / 00</span><span class="microtrack"><i id="progress-bar"></i></span></span>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span><kbd>ESC</kbd> ABORT　　<span id="sound-state">[ 音声 ON ]</span></span>
+        <span class="center"><span id="timer">RUN 00:60</span>　/　<span id="kps">0.0 字/秒</span></span>
+        <span class="signal">● LOCAL LINK</span>
+      </footer>
+
+      <!-- overlays -->
+      <section class="overlay" id="title-screen">
+        <div class="ov-box">
+          <div class="eyebrow">ICEBREAKER // PROTOTYPE P0</div>
+          <h1>打鍵で、電脳を割れ。</h1>
+          <p class="jp muted">60 秒間、防壁を打ち破れ。単語を打ち切るたびに防壁の層が砕ける。</p>
+          <div class="ov-options">
+            <span>辞書 <kbd>TAB</kbd> <b id="dict-name">日本語</b></span>
+            <span>音声 <kbd>M</kbd></span>
+            <span>脆弱性レポート <kbd>R</kbd></span>
+          </div>
+          <div class="ov-start"><kbd>SPACE</kbd> DIVE</div>
+          <div class="ov-best muted" id="title-best"></div>
+        </div>
+      </section>
+
+      <section class="overlay hidden" id="result-screen">
+        <div class="ov-box result">
+          <div class="eyebrow">[ RUN COMPLETE ]</div>
+          <div class="result-grid">
+            <div><div class="eyebrow">速度</div><div class="big" id="r-speed">0</div><div class="muted small" id="r-kpm"></div></div>
+            <div><div class="eyebrow">正確率</div><div class="big" id="r-acc">0</div><div class="muted small" id="r-miss"></div></div>
+            <div><div class="eyebrow">MAX CHAIN</div><div class="big" id="r-chain">0</div><div class="muted small" id="r-layers"></div></div>
+          </div>
+          <div class="nearmiss jp" id="r-near"></div>
+          <div class="vuln jp" id="r-vuln"></div>
+          <div class="ov-start"><kbd>SPACE</kbd> RE-DIVE　　<kbd>R</kbd> REPORT　　<kbd>ESC</kbd> TITLE</div>
+        </div>
+      </section>
+
+      <section class="overlay report hidden" id="report-screen"><div class="rp" id="report"></div></section>
+
+      <div class="ime-warning hidden" id="ime-warning">IME をオフにしてください（英数入力）</div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

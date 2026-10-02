@@ -1,0 +1,266 @@
+{
+  "checks": [
+    {
+      "crisp": [
+        {
+          "ancestorEffects": [],
+          "font": "\"Hiragino Kaku Gothic ProN\", \"Hiragino Sans\", sans-serif",
+          "text": "脆弱性"
+        },
+        {
+          "ancestorEffects": [],
+          "font": "\"Hiragino Kaku Gothic ProN\", \"Hiragino Sans\", sans-serif",
+          "text": "ぜいじゃくせい"
+        },
+        {
+          "ancestorEffects": [],
+          "font": "Menlo, Consolas, \"Hiragino Kaku Gothic ProN\", \"Hiragino Sans\", monospace",
+          "text": "zeijakusei"
+        },
+        {
+          "ancestorEffects": [],
+          "font": "Menlo, Consolas, \"Hiragino Kaku Gothic ProN\", \"Hiragino Sans\", monospace",
+          "text": "zeija"
+        }
+      ],
+      "dimensions": {
+        "height": 1080,
+        "width": 1920
+      },
+      "inputPanel": {
+        "background": "rgb(8, 15, 22)",
+        "height": 252,
+        "width": 960,
+        "x": 480,
+        "y": 754
+      },
+      "inputPanelCount": 1,
+      "japaneseFontVerification": {
+        "allCovered": true,
+        "font": "HiraginoSans-W3",
+        "missingCodepoints": [],
+        "uniqueGlyphs": 19
+      },
+      "japaneseText": [
+        "標準防壁",
+        "第",
+        "層",
+        "接続",
+        "脆弱性",
+        "ぜいじゃくせい",
+        "音声"
+      ],
+      "name": "01_dive",
+      "overflow": [],
+      "selfContained": true
+    },
+    {
+      "crisp": [
+        {
+          "ancestorEffects": [],
+          "font": "\"Hiragino Kaku Gothic ProN\", \"Hiragino Sans\", sans-serif",
+          "text": "きょうりょく"
+        },
+        {
+          "ancestorEffects": [],
+          "font": "Menlo, Consolas, \"Hiragino Kaku Gothic ProN\", \"Hiragino Sans\", monospace",
+          "text": "kyouryoku"
+        },
+        {
+          "ancestorEffects": [],
+          "font": "Menlo, Consolas, \"Hiragino Kaku Gothic ProN\", \"Hiragino Sans\", monospace",
+          "text": "kyo"
+        }
+      ],
+      "dimensions": {
+        "height": 1080,
+        "width": 1920
+      },
+      "inputPanel": {
+        "background": "rgb(8, 15, 22)",
+        "height": 252,
+        "width": 960,
+        "x": 480,
+        "y": 754
+      },
+      "inputPanelCount": 1,
+      "japaneseFontVerification": {
+        "allCovered": true,
+        "font": "HiraginoSans-W3",
+        "missingCodepoints": [],
+        "uniqueGlyphs": 30
+      },
+      "japaneseText": [
+        "解析完了",
+        "標的",
+        "遷移",
+        "促音処理",
+        "適応型防衛コア",
+        "次の語",
+        "回復",
+        "きょうりょく",
+        "音声"
+      ],
+      "name": "02_mirror",
+      "overflow": [],
+      "selfContained": true
+    },
+    {
+      "crisp": [],
+      "dimensions": {
+        "height": 1080,
+        "width": 1920
+      },
+      "inputPanel": null,
+      "inputPanelCount": 0,
+      "japaneseFontVerification": {
+        "allCovered": true,
+        "font": "HiraginoSans-W3",
+        "missingCodepoints": [],
+        "uniqueGlyphs": 155
+      },
+      "japaneseText": [
+        "脆弱性レポート",
+        "打鍵",
+        "キーボードヒートマップ",
+        "遅さ",
+        "ミス率",
+        "ぬ",
+        "ふ",
+        "あ",
+        "う",
+        "え",
+        "お",
+        "や",
+        "ゆ",
+        "よ",
+        "わ",
+        "ほ",
+        "へ",
+        "ー",
+        "た",
+        "て",
+        "い",
+        "す",
+        "か",
+        "ん",
+        "な",
+        "に",
+        "ら",
+        "せ",
+        "゛",
+        "゜",
+        "ち",
+        "と",
+        "し",
+        "は",
+        "き",
+        "く",
+        "ま",
+        "の",
+        "り",
+        "れ",
+        "け",
+        "む",
+        "つ",
+        "さ",
+        "そ",
+        "ひ",
+        "こ",
+        "み",
+        "も",
+        "ね",
+        "る",
+        "め",
+        "ろ",
+        "英数",
+        "かな",
+        "標準運指",
+        "同条件の遷移で比較",
+        "遷移マトリクス",
+        "打",
+        "右手から左手への遷移",
+        "拗音でリズムが途切れる",
+        "縦",
+        "直前キー",
+        "横",
+        "次キー",
+        "回以上の遷移を表示",
+        "改善インパクト順",
+        "検出された課題",
+        "深刻度",
+        "改善インパクト",
+        "遷移遅延",
+        "打",
+        "パッチ開始",
+        "っ",
+        "促音",
+        "ミス率",
+        "打",
+        "パッチ開始",
+        "左薬指",
+        "段越え",
+        "打",
+        "パッチ開始",
+        "遷移遅延",
+        "打",
+        "成長ログ",
+        "字",
+        "秒",
+        "自己基準",
+        "あなたの打鍵タイプ",
+        "安定型",
+        "交互打鍵は安定",
+        "と左薬指の段越えに遅延",
+        "まずは拗音のパッチから",
+        "克服は初見の確認問題で判定",
+        "ログはあなたの端末だけに保存されます"
+      ],
+      "name": "03_vuln_report",
+      "overflow": [],
+      "selfContained": true
+    },
+    {
+      "crisp": [],
+      "dimensions": {
+        "height": 630,
+        "width": 1200
+      },
+      "inputPanel": null,
+      "inputPanelCount": 0,
+      "japaneseFontVerification": {
+        "allCovered": true,
+        "font": "HiraginoSans-W3",
+        "missingCodepoints": [],
+        "uniqueGlyphs": 42
+      },
+      "japaneseText": [
+        "侵入者",
+        "自分の限界を突破する",
+        "速度",
+        "字",
+        "秒",
+        "正確率",
+        "自己ベストまで",
+        "あと",
+        "字",
+        "秒",
+        "打鍵で開いた",
+        "あなただけの経路",
+        "打鍵で",
+        "電脳を割れ"
+      ],
+      "name": "04_result_card",
+      "overflow": [],
+      "selfContained": true
+    }
+  ],
+  "renderer": "macOS system WebKit / in-process / offline HTML from memory",
+  "pngHeaderDimensionsVerified": true,
+  "visualInspection": {
+    "allFourScreensViewed": true,
+    "japaneseTofuObserved": false,
+    "protectedInputTextCrisp": true,
+    "clippingObserved": false
+  }
+}
