@@ -134,7 +134,7 @@ export function analyze(events: StoredKey[], opts?: { dict?: string }): Report {
     if (event.t < session.lastTime) session.ordered = false;
     session.lastTime = event.t;
     if (event.correct) session.correct++;
-    const clean = event.correct && !event.wordStart && !event.afterMiss
+    const clean = event.correct && !event.wordStart && !event.afterMiss && !event.afterPause
       && Number.isFinite(event.dt) && event.dt > 0 && event.dt < 3000;
     const log = clean ? Math.log(event.dt) : null;
     if (clean) { latencies.push(event.dt); session.latencies.push(event.dt); }
@@ -150,7 +150,9 @@ export function analyze(events: StoredKey[], opts?: { dict?: string }): Report {
       targets.set(to, target);
     }
     add(target, event.correct, log);
-    const from = event.prevKey;
+    // Reading/reaction attempts belong to the boundary stratum, even if a
+    // legacy recorder retained the previous word's final accepted key.
+    const from = event.wordStart ? null : event.prevKey;
     let pair = target.incoming.get(from);
     if (!pair) {
       pair = { ...moments(), from, to, group: movement(from, to), recovery: [] };
@@ -180,10 +182,10 @@ export function analyze(events: StoredKey[], opts?: { dict?: string }): Report {
       for (const miss of pending) {
         const elapsed = event.t - miss.t;
         if (!Number.isFinite(elapsed) || elapsed < 0) continue;
-        if (miss.intended === null) continue;
+        if (miss.intended === null || miss.afterPause || event.afterPause) continue;
         const target = targets.get(miss.intended)!;
         target.recovery.push(elapsed);
-        target.incoming.get(miss.prevKey)!.recovery.push(elapsed);
+        target.incoming.get(miss.wordStart ? null : miss.prevKey)!.recovery.push(elapsed);
       }
       pending.length = 0;
     }

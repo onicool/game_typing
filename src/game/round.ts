@@ -1,5 +1,15 @@
 import { TypingSession, normalizeReading } from '../engine/romaji';
-import { WordStream, type Dictionary, type Word } from '../content/words';
+import type { Dictionary, Word } from '../content/words';
+import { BenchmarkSource, targetsInWord, type Pick } from '../stats/select';
+import { loadBaselines, type Baselines } from '../stats/baselines';
+
+export interface WordSource { next(): Pick }
+export interface RoundOptions {
+  mode?: 'benchmark' | 'patch';
+  source?: WordSource;
+  baselines?: Baselines;
+  seed?: number;
+}
 
 export const ROUND_MS = 60_000;
 export const LAYERS_PER_FIREWALL = 5;
@@ -17,6 +27,11 @@ export interface KeyLog {
   afterMiss: boolean;
   /** For misses: the key eventually accepted at that position. */
   intended: string | null;
+  wordId?: string;
+  role?: 'ordinary' | 'weak' | 'probe';
+  target?: string | null;
+  afterPause?: boolean;
+  prob?: number;
 }
 
 export interface KeyOutcome {
@@ -53,6 +68,8 @@ const median = (xs: number[]) => {
 };
 
 export class Round {
+  readonly mode: 'benchmark' | 'patch';
+  readonly seed: number;
   readonly log: KeyLog[] = [];
   startT: number | null = null;
   endT: number | null = null;
@@ -73,7 +90,16 @@ export class Round {
   misses = 0;
   correct = 0;
 
-  private stream: WordStream;
+  private readonly source: WordSource;
+  private readonly baselines: Baselines;
+  private pick: Pick;
+  /** Provenance of the word being typed (role/target), for display. */
+  get currentPick(): Pick { return this.pick; }
+  private nextPick: Pick;
+  private pausedAt: number | null = null;
+  private pausedMs = 0;
+  private wasInterrupted = false;
+  private afterPausePending = false;
   private lastAcceptT: number | null = null;
   private lastKey: string | null = null;
   private missedSinceAccept = false;
@@ -91,21 +117,56 @@ export class Round {
   private bestMedian = Infinity;
   private readonly foldCase: boolean;
 
-  constructor(dict: Dictionary, private prefs: Record<string, string>) {
+  constructor(dict: Dictionary, private prefs: Record<string, string>, opts: RoundOptions = {}) {
+    this.mode = opts.mode ?? 'benchmark';
+    const sourceSeed = opts.source && 'seed' in opts.source && typeof opts.source.seed === 'number' ? opts.source.seed : undefined;
+    this.seed = (opts.seed ?? sourceSeed ?? Math.floor(Math.random() * 2 ** 32)) >>> 0;
+    this.source = opts.source ?? new BenchmarkSource(dict, this.seed);
+    this.baselines = new Map([...(opts.baselines ?? loadBaselines(dict))].map(([pair, value]) => [pair, { ...value }]));
     this.foldCase = dict.id.startsWith('jp');
-    this.stream = new WordStream(dict);
-    this.word = this.stream.next();
-    this.nextWord = this.stream.next();
+    this.pick = this.source.next();
+    this.nextPick = this.source.next();
+    this.word = this.pick.word;
+    this.nextWord = this.nextPick.word;
     this.session = new TypingSession(this.word.reading, { prefs });
   }
 
   get started() { return this.startT !== null; }
   get finished() { return this.endT !== null; }
+  get paused() { return this.pausedAt !== null; }
+  get interrupted() { return this.wasInterrupted; }
+
+  pause(t: number): void {
+    if (this.paused || this.finished) return;
+    this.checkDeadline(t);
+    if (this.finished) return;
+    this.pausedAt = t;
+    if (this.started) this.wasInterrupted = true;
+  }
+
+  resume(t: number): void {
+    if (this.pausedAt === null) return;
+    if (this.started) this.pausedMs += Math.max(0, t - this.pausedAt);
+    this.pausedAt = null;
+    this.afterPausePending = true;
+  }
+
+  private elapsedMs(now: number): number {
+    if (this.startT === null) return 0;
+    return Math.max(0, (this.endT ?? this.pausedAt ?? now) - this.startT - this.pausedMs);
+  }
+
+  private checkDeadline(now: number): void {
+    if (!this.paused && this.started && !this.finished && this.elapsedMs(now) >= ROUND_MS) {
+      this.endT = this.startT! + this.pausedMs + ROUND_MS;
+    }
+  }
 
   remainingMs(now: number) {
-    if (this.startT === null) return ROUND_MS;
-    return Math.max(0, ROUND_MS - (now - this.startT));
+    return Math.max(0, ROUND_MS - this.elapsedMs(now));
   }
+
+  accuracy(): number { return this.correct + this.misses ? this.correct / (this.correct + this.misses) : 1; }
 
   totalKana() { return this.kanaDone + this.session.kanaDone; }
 
@@ -117,24 +178,28 @@ export class Round {
   }
 
   tick(now: number, dt: number) {
+    if (this.paused || this.finished) return;
     this.trace = Math.max(0, this.trace - dt * 1.5);
-    if (this.startT !== null && !this.finished && now - this.startT >= ROUND_MS) this.endT = this.startT + ROUND_MS;
+    this.checkDeadline(now);
   }
 
   input(rawKey: string, t: number, code = ''): KeyOutcome {
     const out: KeyOutcome = { late: false, accepted: false, critical: false, criticalGainMs: 0, wordDone: false, firewallDone: false, stageChanged: false };
-    if (this.startT !== null && t - this.startT >= ROUND_MS) this.endT ??= this.startT + ROUND_MS;
+    this.checkDeadline(t);
     if (this.finished) {
       out.late = true;
       return out;
     }
+    if (this.paused) return out;
     if (this.startT === null) this.startT = t;
     const key = this.foldCase ? rawKey.toLowerCase() : rawKey;
     const res = this.session.input(rawKey);
-    const dt = this.lastAcceptT === null ? NaN : t - this.lastAcceptT;
+    const dt = this.lastAcceptT === null || this.afterPausePending ? NaN : t - this.lastAcceptT;
     const entry: KeyLog = {
       t, key, code, correct: res.accepted, expected: res.expected, prevKey: this.lastKey,
       dt, wordStart: this.wordStartPending, afterMiss: this.missedSinceAccept, intended: null,
+      afterPause: this.afterPausePending,
+      wordId: this.pick.id, role: this.pick.role, target: this.pick.target, prob: this.pick.prob,
     };
     this.log.push(entry);
     this.recentCorrect.push(res.accepted);
@@ -167,11 +232,13 @@ export class Round {
     this.maxChain = Math.max(this.maxChain, this.chain);
 
     // timing features: only clean within-word transitions
-    const clean = !this.wordStartPending && !this.missedSinceAccept && isTiming(dt);
+    const clean = !this.wordStartPending && !this.missedSinceAccept && !this.afterPausePending && isTiming(dt);
     if (clean) {
       // critical = clearly faster than this transition's own baseline
       const base = this.baseline(this.lastKey!, key);
-      if (this.intervals.length >= 10 && Number.isFinite(base) && dt < base * 0.68) {
+      const personal = this.baselines.get(`${this.lastKey}${key}`);
+      const ready = personal ? personal.n >= 8 : this.intervals.length >= 10;
+      if (ready && Number.isFinite(base) && dt < base * (personal ? 0.7 : 0.68)) {
         out.critical = true;
         out.criticalGainMs = base - dt;
       }
@@ -189,6 +256,7 @@ export class Round {
     this.lastAcceptT = t;
     this.lastKey = key;
     this.missedSinceAccept = false;
+    this.afterPausePending = false;
     this.wordStartPending = false;
 
     if (res.completed) {
@@ -203,16 +271,25 @@ export class Round {
         this.firewalls++;
         out.firewallDone = true;
       }
-      this.word = this.nextWord;
-      this.nextWord = this.stream.next();
+      this.pick = this.nextPick;
+      // The preview was selected before this word taught us a new spelling.
+      if (this.pick.target && !targetsInWord(this.pick.word.reading, this.prefs).includes(this.pick.target)) {
+        this.pick = this.source.next();
+      }
+      this.nextPick = this.source.next();
+      this.word = this.pick.word;
+      this.nextWord = this.nextPick.word;
       this.session = new TypingSession(this.word.reading, { prefs: this.prefs });
       this.wordStartPending = true;
+      this.lastKey = null; // No cross-word transitions, even for downstream legacy consumers.
     }
     return out;
   }
 
-  /** Personal baseline for a transition: this round's bigram mean, else recent median. */
+  /** Frozen personal baseline, falling back to round-local estimates only for missing pairs. */
   private baseline(prev: string, key: string) {
+    const personal = this.baselines.get(`${prev}${key}`);
+    if (personal) return Math.exp(personal.meanLog);
     const b = this.bigramMean.get(`${prev}${key}`);
     if (b && b.n >= 3) return Math.exp(b.logSum / b.n);
     return median(this.intervals);
@@ -226,13 +303,19 @@ export class Round {
   private updateStage(): boolean {
     this.keysSinceStageUp++;
     const n = 16;
-    const recent = this.log.filter((e) => e.correct && !e.wordStart && !e.afterMiss && isTiming(e.dt)).slice(-n);
+    const recent = this.log.filter((e) => e.correct && !e.wordStart && !e.afterMiss && !e.afterPause && isTiming(e.dt)).slice(-n);
     if (recent.length < n) return false;
     const res = recent.map((e) => Math.log(e.dt) - Math.log(this.baseline(e.prevKey ?? '', e.key)));
     const mean = res.reduce((a, b) => a + b, 0) / res.length;
     const sd = Math.sqrt(res.reduce((a, b) => a + (b - mean) ** 2, 0) / res.length);
     const acc = this.recentCorrect.filter(Boolean).length / this.recentCorrect.length;
-    const notSlow = Number.isFinite(this.bestMedian) && median(recent.map((e) => e.dt)) <= this.bestMedian * 1.2;
+    const personalResiduals = recent.flatMap(e => {
+      const base = this.baselines.get(`${e.prevKey}${e.key}`);
+      return base ? [Math.log(e.dt) - base.meanLog] : [];
+    });
+    const notSlow = this.baselines.size
+      ? personalResiduals.length > 0 && personalResiduals.reduce((a, b) => a + b, 0) / personalResiduals.length <= 0.05
+      : Number.isFinite(this.bestMedian) && median(recent.map((e) => e.dt)) <= this.bestMedian * 1.2;
     let target = 0;
     if (acc >= 0.93 && notSlow) target = sd < 0.22 ? 3 : sd < 0.3 ? 2 : sd < 0.4 ? 1 : 0;
     target = Math.min(target, this.chain >= 60 ? 3 : this.chain >= 30 ? 2 : this.chain >= 12 ? 1 : 0);
@@ -252,8 +335,8 @@ export class Round {
   }
 
   result(): RoundResult {
-    const elapsed = ((this.endT ?? performance.now()) - (this.startT ?? 0)) / 1000 || 1;
-    const clean = this.log.filter((e) => e.correct && !e.wordStart && !e.afterMiss && isTiming(e.dt) && e.dt < 2000);
+    const elapsed = Math.min(ROUND_MS, this.elapsedMs(performance.now())) / 1000 || 1;
+    const clean = this.log.filter((e) => e.correct && !e.wordStart && !e.afterMiss && !e.afterPause && isTiming(e.dt) && e.dt < 2000);
     const overall = median(clean.map((e) => e.dt));
     const groups = new Map<string, number[]>();
     for (const e of clean) {
@@ -277,7 +360,7 @@ export class Round {
     return {
       kanaPerSec: this.totalKana() / elapsed,
       keysPerMin: (this.correct / elapsed) * 60,
-      accuracy: this.correct + this.misses ? this.correct / (this.correct + this.misses) : 1,
+      accuracy: this.accuracy(),
       misses: this.misses,
       maxChain: this.maxChain,
       layers: this.layersTotal,

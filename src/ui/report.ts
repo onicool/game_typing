@@ -1,5 +1,7 @@
 import type { Report, Severity } from '../stats/types';
 
+export const PATCH_KEYS_HINT = '[1]–[8] パッチ';
+
 const ROWS = ['1234567890-^', 'qwertyuiop@[', 'asdfghjkl;:]', 'zxcvbnm,./'];
 const ROW_INDENT = [0, 26, 40, 62];
 
@@ -42,20 +44,31 @@ function keyboard(report: Report, metric: 'latency' | 'miss'): string {
 }
 
 function trendChart(report: Report): string {
-  const pts = report.trend.filter((p) => p.kanaPerSec !== undefined).slice(-30);
+  const pts = report.trend.filter((p) => Number.isFinite(p.kanaPerSec) && Number.isFinite(p.accuracy)).slice(-30);
   if (pts.length < 2) return '<div class="muted small">2ラン以上で推移を表示します</div>';
-  const W = 560, H = 150, P = 10;
-  const ys = pts.map((p) => p.kanaPerSec!);
-  const lo = Math.min(...ys) * 0.95, hi = Math.max(...ys) * 1.05 || 1;
-  const xy = ys.map((y, i) => [P + (i / (ys.length - 1)) * (W - 2 * P), H - P - ((y - lo) / (hi - lo || 1)) * (H - 2 * P)]);
-  const line = xy.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  const area = `${P},${H - P} ${line} ${W - P},${H - P}`;
-  const [lx, ly] = xy[xy.length - 1];
-  return `<svg viewBox="0 0 ${W} ${H}" class="trend">
-    <polygon points="${area}" fill="rgba(101,245,237,0.08)" />
-    <polyline points="${line}" fill="none" stroke="#65f5ed" stroke-width="2" />
-    <circle cx="${lx}" cy="${ly}" r="4" fill="#e4eef1" />
-  </svg>`;
+  const W = 560, H = 170, P = 44, top = 24, bottom = H - 24;
+  const speed = pts.map(p => p.kanaPerSec!);
+  const accuracy = pts.map(p => Math.max(0, Math.min(1, p.accuracy)));
+  const speedLo = Math.max(0, Math.min(...speed) * 0.85), speedHi = Math.max(1, Math.max(...speed) * 1.15);
+  const accuracyLo = Math.max(0, Math.min(0.9, Math.floor(Math.min(...accuracy) * 10) / 10));
+  const ema = (values: number[]): number[] => {
+    let value = values[0];
+    return values.map(v => (value += (v - value) / 3)); // alpha=2/(5+1), five-session EMA
+  };
+  const line = (values: number[], lo: number, hi: number): string => values.map((v, i) =>
+    `${(P + i / (values.length - 1) * (W - 2 * P)).toFixed(1)},${(bottom - (v - lo) / (hi - lo || 1) * (bottom - top)).toFixed(1)}`).join(' ');
+  const series = (name: string, values: number[], lo: number, hi: number, color: string): string => `
+    <polyline data-series="${name}" points="${line(values, lo, hi)}" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.5" />
+    <polyline data-series="${name}-ema" points="${line(ema(values), lo, hi)}" fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="5 3" />`;
+  return `<div class="small"><span style="color:#65f5ed">速度 ${speed.at(-1)!.toFixed(2)} 字/秒</span>　<span style="color:#ef86c0">正確率 ${(accuracy.at(-1)! * 100).toFixed(1)}%</span>　<span class="muted">破線: EMA（5ラン）</span></div>
+    <svg viewBox="0 0 ${W} ${H}" class="trend" role="img" aria-label="速度（左軸・字/秒）と正確率（右軸・%）、5ランの指数移動平均">
+      <title>速度と正確率の推移</title>
+      <path d="M${P} ${top}V${bottom}H${W - P}V${top}" fill="none" stroke="#40545f" />
+      <g font-size="11" fill="#65f5ed"><text x="2" y="${top + 4}">${speedHi.toFixed(1)}</text><text x="2" y="${bottom}">${speedLo.toFixed(1)}</text></g>
+      <g font-size="11" fill="#ef86c0"><text x="${W - P + 5}" y="${top + 4}">100%</text><text x="${W - P + 5}" y="${bottom}">${Math.round(accuracyLo * 100)}%</text></g>
+      ${series('speed', speed, speedLo, speedHi, '#65f5ed')}
+      ${series('accuracy', accuracy, accuracyLo, 1, '#ef86c0')}
+    </svg>`;
 }
 
 function profileNote(report: Report): string {
@@ -78,15 +91,16 @@ function reason(v: Report['vulns'][number]): string {
 export function renderReport(el: HTMLElement, report: Report, dictName: string, metric: 'latency' | 'miss') {
   const active = report.vulns.filter((v) => v.severity !== 'INVESTIGATING').length;
   const rows = report.vulns.length
-    ? report.vulns.slice(0, 8).map((v) => `
+    ? report.vulns.slice(0, 8).map((v, i) => `
       <tr>
         <td class="mono muted">${esc(v.id)}</td>
         <td><code>${esc(v.label)}</code> ${v.kind === 'bigram' ? '遷移' : 'キー'}　${reason(v)}</td>
         <td class="${SEVERITY_CLASS[v.severity]}">${SEVERITY_LABEL[v.severity]}</td>
         <td class="mono">+${Math.round(v.impact)}<small> ms / 1000打</small></td>
         <td class="mono muted">${v.n}</td>
+        <td class="mono"><kbd>[${i + 1}]</kbd> パッチ</td>
       </tr>`).join('')
-    : '<tr><td colspan="5" class="muted">まだ脆弱性は検出されていません。ベンチマークを数回走らせてください。</td></tr>';
+    : '<tr><td colspan="6" class="muted">まだ脆弱性は検出されていません。ベンチマークを数回走らせてください。</td></tr>';
 
   el.innerHTML = `
     <div class="rp-head">
@@ -107,18 +121,18 @@ export function renderReport(el: HTMLElement, report: Report, dictName: string, 
         <div class="muted small rp-foot">標準的な遷移との比較　FAST <i class="sw" style="background:${heatColor(0.8)}"></i><i class="sw" style="background:${heatColor(1.0)}"></i><i class="sw" style="background:${heatColor(1.12)}"></i><i class="sw" style="background:${heatColor(1.35)}"></i> SLOW　（5回未満のキーは灰色）</div>
       </section>
       <section class="rp-card rp-trend">
-        <div class="rp-title"><span>02　成長ログ</span><span class="muted small">BENCHMARK / 字/秒</span></div>
+        <div class="rp-title"><span>02　成長ログ</span><span class="muted small">BENCHMARK / 字/秒・正確率</span></div>
         ${trendChart(report)}
         <div class="rp-note jp">${profileNote(report)}</div>
       </section>
       <section class="rp-card rp-list">
         <div class="rp-title"><span>03　改善インパクト順</span><span class="muted small">深刻度は「1000打あたりの損失時間」で判定</span></div>
         <table class="vuln-table">
-          <thead><tr><th>ID</th><th>検出された課題</th><th>深刻度</th><th>改善インパクト</th><th>n</th></tr></thead>
+          <thead><tr><th>ID</th><th>検出された課題</th><th>深刻度</th><th>改善インパクト</th><th>n</th><th>パッチ</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </section>
     </div>
-    <div class="rp-footer muted small"><span><kbd>ESC</kbd> 戻る</span><span>ログはこの端末だけに保存されます。</span></div>
+    <div class="rp-footer muted small"><span><kbd>ESC</kbd> 戻る　${PATCH_KEYS_HINT}</span><span>ログはこの端末だけに保存されます。</span></div>
   `;
 }

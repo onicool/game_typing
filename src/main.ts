@@ -6,8 +6,10 @@ import { DICTIONARIES } from './content/words';
 import { TypingSession, normalizeReading } from './engine/romaji';
 import { analyze } from './stats/analyze';
 import { loadEvents, loadSessions, saveSession } from './stats/store';
-import type { StoredKey } from './stats/types';
+import type { Report, StoredKey, Vuln } from './stats/types';
 import { renderReport } from './ui/report';
+import { loadBaselines, updateBaselines } from './stats/baselines';
+import { PatchSource } from './stats/select';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -38,24 +40,39 @@ let mode: Mode = 'title';
 let reportReturn: Mode = 'title';
 let reportMetric: 'latency' | 'miss' = 'latency';
 let reportRequest = 0; // bumped on every open/close so a slow load cannot render over a newer one
+let report: { data: Report; dictId: string; request: number } | null = null;
+let settingsOpen = false;
 let dictIdx = store.get('dict', 0) % DICTIONARIES.length;
 const prefs: Record<string, string> = store.get('prefs', {});
 let round: Round | null = null;
 audio.enabled = store.get('sound', true);
+const savedVolume = store.get('volume', 1);
+audio.setVolume(typeof savedVolume === 'number' && Number.isFinite(savedVolume) ? Math.max(0, Math.min(1, savedVolume)) : 1);
+
+type Effect = 'shake' | 'flash' | 'motion';
+type EffectLevel = 0 | 0.5 | 1;
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const effectDefaults: Record<Effect, EffectLevel> = { shake: reducedMotion ? 0 : 1, flash: 1, motion: reducedMotion ? 0 : 1 };
+const effects = {} as Record<Effect, EffectLevel>;
+for (const key of ['shake', 'flash', 'motion'] as const) {
+  const value = store.get(`effects.${key}`, effectDefaults[key]);
+  effects[key] = value === 0 || value === 0.5 || value === 1 ? value : effectDefaults[key];
+}
 
 // ---- layout ---------------------------------------------------------------
 
 function fit() {
   const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
   stage.style.transform = `scale(${s})`;
+  stage.style.setProperty('--text-boost', String(Math.max(1, Math.min(1.7, 0.75 / s))));
   scene.resize(s);
 }
 window.addEventListener('resize', fit);
 fit();
 
-// trace track segments
-const traceTrack = $('trace-track');
-for (let i = 0; i < 24; i++) traceTrack.appendChild(document.createElement('i'));
+// Accuracy track segments
+const accuracyTrack = $('accuracy-track');
+for (let i = 0; i < 24; i++) accuracyTrack.appendChild(document.createElement('i'));
 
 // ---- HUD rendering --------------------------------------------------------
 
@@ -64,13 +81,16 @@ const els = {
   nextWord: $('next-word'), nextGuide: $('next-guide'),
   inputLabel: $('input-label'), progressText: $('progress-text'), progressBar: $('progress-bar'),
   chain: $('chain'), chainCaption: $('chain-caption'), ocStages: $('oc-stages'), ocName: $('oc-name'),
-  traceVal: $('trace-val'), traceNote: $('trace-note'),
+  accuracyVal: $('accuracy-val'), accuracyNote: $('accuracy-note'),
   integrityVal: $('integrity-val'), integrityBar: $('integrity-bar'),
   layerIndex: $('layer-index'), iceStatus: $('ice-status'), iceId: $('ice-id'), iceKind: $('ice-kind'),
   enemyLog: $('enemy-log'), depth: $('depth'), depthSub: $('depth-sub'),
   sectorNo: $('sector-no'), sectorSub: $('sector-sub'),
   timer: $('timer'), kps: $('kps'), modeLabel: $('mode-label'), sound: $('sound-state'),
-  edge: $('edge-flash'), ime: $('ime-warning'),
+  edge: $('edge-flash'), ime: $('ime-warning'), readyHelp: $('ready-help'),
+  timeBar: $('time-bar'), layerPips: $('layer-pips'), chainPop: $('chain-pop'),
+  soundToggle: $<HTMLButtonElement>('sound-toggle'), soundIcon: $('sound-icon'),
+  volume: $<HTMLInputElement>('sound-volume'),
 };
 
 const SECTORS = ['CORPORATE MESH / OUTER RING', 'CORPORATE MESH / INNER RING', 'AI INTERIOR / CORE ACCESS'];
@@ -79,6 +99,74 @@ const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt
 const pad = (n: number, w = 2) => String(n).padStart(w, '0');
 let logLines: string[] = [];
 let errTimer = 0;
+let popTimer = 0;
+let nextWordCached: Round['nextWord'] | null = null;
+
+function renderSound() {
+  els.sound.textContent = audio.enabled ? '[ 音声 ON ]' : '[ 音声 OFF ]';
+  els.soundIcon.textContent = audio.enabled && audio.volume > 0 ? '🔊' : '🔇';
+  els.soundToggle.setAttribute('aria-pressed', String(!audio.enabled));
+  els.soundToggle.setAttribute('aria-label', audio.enabled ? '音声をミュート' : '音声をオン');
+  els.volume.value = String(audio.volume);
+}
+
+function toggleSound() {
+  audio.ensure();
+  audio.enabled = !audio.enabled;
+  store.set('sound', audio.enabled);
+  renderSound();
+}
+
+els.soundToggle.addEventListener('mousedown', (e) => e.preventDefault());
+els.soundToggle.addEventListener('click', () => {
+  toggleSound();
+  els.soundToggle.blur();
+});
+els.volume.addEventListener('input', () => {
+  audio.ensure();
+  audio.setVolume(Number(els.volume.value));
+  store.set('volume', audio.volume);
+  renderSound();
+});
+els.volume.addEventListener('change', () => els.volume.blur());
+els.volume.addEventListener('pointerup', () => els.volume.blur());
+els.volume.addEventListener('keydown', (e) => {
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) e.preventDefault();
+  els.volume.blur();
+});
+
+function applyEffects() {
+  scene.setEffects(effects);
+  stage.style.setProperty('--edge-opacity', String(0.55 * effects.flash));
+  stage.classList.toggle('flash-off', effects.flash === 0);
+  stage.classList.toggle('motion-off', effects.motion === 0);
+  for (const key of ['shake', 'flash', 'motion'] as const) {
+    $(`setting-${key}`).textContent = effects[key] === 0 ? 'オフ' : effects[key] === 0.5 ? '弱' : '標準';
+  }
+  if (effects.flash === 0) els.edge.classList.remove('on');
+}
+
+function cycleEffect(key: Effect) {
+  effects[key] = effects[key] === 0 ? 0.5 : effects[key] === 0.5 ? 1 : 0;
+  store.set(`effects.${key}`, effects[key]);
+  applyEffects();
+}
+
+for (const button of document.querySelectorAll<HTMLButtonElement>('[data-effect]')) {
+  button.addEventListener('mousedown', (e) => e.preventDefault());
+  button.addEventListener('click', () => {
+    cycleEffect(button.dataset.effect as Effect);
+    button.blur();
+  });
+}
+
+function announce(messages: string[]) {
+  if (!messages.length) return;
+  clearTimeout(popTimer);
+  els.chainPop.textContent = messages.join(' · ');
+  els.chainPop.classList.add('visible');
+  popTimer = window.setTimeout(() => els.chainPop.classList.remove('visible'), 1600);
+}
 
 function pushLog(line: string) {
   logLines.push(line);
@@ -106,15 +194,23 @@ function renderPanel(miss = false) {
   const total = normalizeReading(w.reading).length;
   els.progressText.textContent = `${pad(s.kanaDone)} / ${pad(total)}`;
   els.progressBar.style.width = `${(s.kanaDone / total) * 100}%`;
-  els.inputLabel.textContent = `INPUT // ${pad(round.wordsDone + 1, 3)}`;
-  els.nextWord.textContent = round.nextWord.display;
-  els.nextGuide.textContent = isJp ? new TypingSession(round.nextWord.reading, { prefs }).guide : '';
+  const pick = round.currentPick;
+  // only weak-slot words are labelled; probes stay unmarked so they remain a fair check
+  els.inputLabel.textContent = `INPUT // ${pad(round.wordsDone + 1, 3)}${pick.role === 'weak' && pick.target ? `　◆ TARGET ${pick.target}` : ''}`;
+  if (nextWordCached !== round.nextWord) {
+    nextWordCached = round.nextWord;
+    els.nextWord.textContent = round.nextWord.display;
+    els.nextGuide.textContent = isJp ? new TypingSession(round.nextWord.reading, { prefs }).guide : '';
+  }
+  els.readyHelp.classList.toggle('hidden', round.started);
 }
 
 function renderHud() {
   if (!round) return;
   els.chain.textContent = String(round.chain);
   els.chain.classList.toggle('broken', round.chain === 0 && round.misses > 0);
+  const tier = [10, 30, 50, 100, 200].filter((n) => round!.chain >= n).length;
+  els.chainCaption.textContent = `CHAIN TIER ${tier}`;
   [...els.ocStages.children].forEach((el, i) => {
     el.classList.toggle('active', i < round!.stage);
     el.classList.toggle('last', i === 2);
@@ -127,60 +223,117 @@ function renderHud() {
   els.iceKind.textContent = `標準防壁 / 第 ${pad(round.layer + 1)} 層`;
   els.iceId.textContent = `[ ICE // FW-${pad(round.firewalls + 1, 3)} ]`;
   const sector = Math.min(3, 1 + Math.floor(round.firewalls / 2));
-  els.sectorNo.textContent = String(sector);
+  els.sectorNo.textContent = String(round.firewalls + 1);
   els.sectorSub.textContent = SECTORS[sector - 1];
   els.depth.textContent = (round.totalKana() * 12 + round.firewalls * 400).toLocaleString();
   els.depthSub.textContent = `▾ ${['OUTER NETWORK', 'INNER NETWORK', 'AI CORE'][sector - 1]}`;
+  [...els.layerPips.children].forEach((el, i) => el.classList.toggle('broken', i < round!.layer));
+  els.layerPips.setAttribute('aria-label', `この防壁の突破済み層 ${round.layer} / ${LAYERS_PER_FIREWALL}`);
   scene.setDamage(1 - integ);
   scene.setStage(round.stage);
 }
 
-function renderTrace() {
-  const v = round ? round.trace : 0;
-  els.traceVal.innerHTML = `${Math.round(v)}<small>%</small>`;
-  const on = Math.round((v / 100) * 24);
-  [...traceTrack.children].forEach((el, i) => {
+function renderAccuracy() {
+  const v = round ? round.accuracy() : 1;
+  els.accuracyVal.innerHTML = `${(v * 100).toFixed(1)}<small>%</small>`;
+  const on = Math.round(v * 24);
+  [...accuracyTrack.children].forEach((el, i) => {
     el.classList.toggle('on', i < on);
-    el.classList.toggle('hot', i < on && v >= 70);
   });
-  els.traceNote.textContent = v >= 70 ? 'SIGNAL EXPOSURE / CRITICAL' : v >= 35 ? 'SIGNAL EXPOSURE / ELEVATED' : 'SIGNAL EXPOSURE / STABLE';
+  els.accuracyNote.textContent = `ミス ${round?.misses ?? 0}`;
 }
 
 function renderClock(now: number) {
   if (!round) return;
   const rem = round.remainingMs(now);
-  els.timer.textContent = round.started ? `RUN 00:${pad(Math.ceil(rem / 1000))}` : 'RUN 00:60 / 打ち始めるとスタート';
+  els.timer.textContent = round.started ? `RUN 00:${pad(Math.ceil(rem / 1000))}` : 'RUN 00:60 / 最初のキーでスタート';
+  els.timeBar.style.width = `${Math.max(0, Math.min(1, rem / ROUND_MS)) * 100}%`;
   const elapsed = round.started ? (ROUND_MS - rem) / 1000 : 0;
   els.kps.textContent = `${elapsed > 1 ? (round.totalKana() / elapsed).toFixed(1) : '0.0'} 字/秒`;
 }
 
 // ---- flow -----------------------------------------------------------------
 
-function showOverlay(id: 'title-screen' | 'result-screen' | 'report-screen' | null) {
-  for (const o of ['title-screen', 'result-screen', 'report-screen']) $(o).classList.toggle('hidden', id !== o);
+function showOverlay(id: 'title-screen' | 'result-screen' | 'report-screen' | 'pause-screen' | 'settings-screen' | null) {
+  for (const o of ['title-screen', 'result-screen', 'report-screen', 'pause-screen', 'settings-screen']) $(o).classList.toggle('hidden', id !== o);
+  stage.classList.toggle('overlay-open', id !== null);
+}
+
+function pauseRound(t: number) {
+  if (mode !== 'play' || !round || round.paused || round.finished) return;
+  round.pause(t);
+  if (round.finished) return endRound();
+  $('pause-note').textContent = round.interrupted
+    ? '時計と入力を停止しています。再開後は練習扱い（中断あり）になります。'
+    : '最初のキーを打つ前の待機中です。Space / Enter で再開できます。';
+  clearTimeout(errTimer);
+  els.ime.classList.add('hidden');
+  renderPanel();
+  renderClock(t);
+  showOverlay('pause-screen');
+}
+
+function resumeRound(t: number) {
+  if (!round || !round.paused) return;
+  audio.ensure();
+  round.resume(t);
+  showOverlay(null);
+  renderClock(t);
+}
+
+function closeSettings() {
+  settingsOpen = false;
+  showOverlay('title-screen');
 }
 
 async function openReport() {
   if (mode !== 'report') reportReturn = mode;
   mode = 'report';
   const request = ++reportRequest;
+  report = null;
   const d = DICTIONARIES[dictIdx];
   const el = $('report');
   el.innerHTML = '<div class="eyebrow">ANALYZING…</div>';
   showOverlay('report-screen');
   const [events, sessions] = await Promise.all([loadEvents(d.id), loadSessions(d.id)]);
-  if (request !== reportRequest || mode !== 'report') return;
-  const report = analyze(events, { dict: d.id });
-  report.trend = sessions
+  if (request !== reportRequest || mode !== 'report' || d.id !== DICTIONARIES[dictIdx].id) return;
+  const data = analyze(events.filter((event) => event.mode !== 'patch'), { dict: d.id });
+  const bySession = new Map(sessions.map((x) => [x.session, x]));
+  const benchmarks = new Set(events.filter((event) => event.mode === 'benchmark').map((event) => event.session));
+  data.trend = data.trend.filter((point) => {
+    const meta = bySession.get(point.session);
+    return meta ? meta.mode === 'benchmark' : benchmarks.has(point.session);
+  }).map((point) => {
+    const meta = bySession.get(point.session);
+    return meta ? { ...point, kanaPerSec: meta.kanaPerSec, accuracy: meta.accuracy } : point;
+  });
+  const seen = new Set(data.trend.map((x) => x.session));
+  data.trend.push(...sessions
+    .filter((x) => x.mode === 'benchmark' && !seen.has(x.session))
     .sort((a, b) => a.endedAt - b.endedAt)
-    .map((x) => ({ session: x.session, kanaPerSec: x.kanaPerSec, latencyMs: 0, accuracy: x.accuracy }));
-  renderReport(el, report, d.name, reportMetric);
+    .map((x) => ({ session: x.session, kanaPerSec: x.kanaPerSec, latencyMs: NaN, accuracy: x.accuracy })));
+  renderReport(el, data, d.name, reportMetric);
+  report = { data, dictId: d.id, request };
 }
 
 function closeReport() {
   reportRequest++;
+  report = null;
   mode = reportReturn;
   showOverlay(mode === 'result' ? 'result-screen' : 'title-screen');
+}
+
+/** What a retry from the result/pause screen repeats: a benchmark, or a patch on the same focus. */
+let lastRun: { mode: 'benchmark' } | { mode: 'patch'; focus: string; dictId: string; vulns: Vuln[] } = { mode: 'benchmark' };
+
+function startPatch(index: number) {
+  if (mode !== 'report' || !report || report.dictId !== DICTIONARIES[dictIdx].id || report.request !== reportRequest) return;
+  const vuln = report.data.vulns[index];
+  if (!vuln) return;
+  const run: typeof lastRun = { mode: 'patch', focus: vuln.label, dictId: report.dictId, vulns: report.data.vulns.map((v) => ({ ...v })) };
+  reportRequest++;
+  report = null;
+  startRound(run);
 }
 
 function renderTitle() {
@@ -189,12 +342,37 @@ function renderTitle() {
   els.modeLabel.textContent = `${d.label}　|　IME OFF`;
   const best = store.get<number>(`pb.${d.id}`, 0);
   $('title-best').textContent = best ? `自己ベスト ${best.toFixed(2)} 字/秒` : '';
-  els.sound.textContent = audio.enabled ? '[ 音声 ON ]' : '[ 音声 OFF ]';
+  renderSound();
 }
 
-function startRound() {
-  round = new Round(DICTIONARIES[dictIdx], prefs);
+function startRound(run: typeof lastRun = { mode: 'benchmark' }) {
+  const dict = DICTIONARIES[dictIdx];
+  const seed = (Math.random() * 2 ** 31) >>> 0;
+  const baselines = loadBaselines(dict);
+  if (run.mode === 'patch' && run.dictId === dict.id && run.vulns.length) {
+    try {
+      const source = new PatchSource(dict.words, run.dictId, run.vulns, prefs, { seed, focus: run.focus });
+      round = new Round(dict, prefs, { mode: 'patch', source, baselines, seed });
+    } catch (err) {
+      console.warn('patch pool unavailable, falling back to benchmark', err);
+      run = { mode: 'benchmark' };
+      round = new Round(dict, prefs, { baselines, seed });
+    }
+  } else {
+    run = { mode: 'benchmark' };
+    round = new Round(dict, prefs, { baselines, seed });
+  }
+  lastRun = run;
+  const d0 = DICTIONARIES[dictIdx];
+  els.modeLabel.textContent = run.mode === 'patch' ? `PATCH // ${run.focus}　|　${d0.label}` : `${d0.label}　|　IME OFF`;
   mode = 'play';
+  settingsOpen = false;
+  nextWordCached = null;
+  clearTimeout(errTimer);
+  clearTimeout(popTimer);
+  els.chainPop.classList.remove('visible');
+  els.edge.classList.remove('on');
+  els.ime.classList.add('hidden');
   logLines = [];
   els.enemyLog.innerHTML = '';
   pushLog('LINK ESTABLISHED');
@@ -205,22 +383,51 @@ function startRound() {
   showOverlay(null);
   renderPanel();
   renderHud();
-  renderTrace();
+  renderAccuracy();
+  renderClock(performance.now());
 }
 
 function endRound() {
   if (!round) return;
+  const completedRound = round;
   mode = 'result';
+  clearTimeout(errTimer);
+  clearTimeout(popTimer);
+  els.chainPop.classList.remove('visible');
+  els.readyHelp.classList.add('hidden');
   const d = DICTIONARIES[dictIdx];
   const r: RoundResult = round.result();
+  const isPatch = round.mode === 'patch';
+  const interrupted = round.interrupted;
+  const sessionMode = isPatch ? 'patch' : interrupted ? 'practice' : 'benchmark';
+  const eligibleForBest = !interrupted && !isPatch;
   const pbKey = `pb.${d.id}`;
   const best = store.get<number>(pbKey, 0);
-  if (r.kanaPerSec > best) store.set(pbKey, r.kanaPerSec);
+  if (eligibleForBest && r.kanaPerSec > best) store.set(pbKey, r.kanaPerSec);
   store.set('prefs', prefs);
+  updateBaselines(d, round.log);
   const session = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-  const events: StoredKey[] = round.log.map((e) => ({ ...e, session, mode: 'benchmark', dict: d.id }));
-  void saveSession(events, { session, dict: d.id, mode: 'benchmark', kanaPerSec: r.kanaPerSec, accuracy: r.accuracy, endedAt: Date.now() })
-    .catch((err) => console.warn('failed to save session', err));
+  const events: StoredKey[] = round.log.map((e) => ({ ...e, session, mode: sessionMode, dict: d.id }));
+  const meta = { session, dict: d.id, mode: sessionMode, kanaPerSec: r.kanaPerSec, accuracy: r.accuracy, endedAt: Date.now() };
+  $('recent-sessions').textContent = '直近5セッションを読み込み中…';
+  void saveSession(events, meta)
+    .catch((err) => console.warn('failed to save session', err))
+    .then(async () => {
+      const sessions = await loadSessions(d.id);
+      if (round !== completedRound) return;
+      // Include the current result even if persistent storage is unavailable.
+      const recent = [meta, ...sessions.filter((x) => x.session !== session)]
+        .sort((a, b) => b.endedAt - a.endedAt).slice(0, 5);
+      $('recent-sessions').innerHTML = '<div class="eyebrow">RECENT // 直近5セッション</div>' + recent.map((x) =>
+        `<div class="session-row${x.session === session ? ' current' : ''}"><span>${x.session === session ? '今回' : esc(new Date(x.endedAt).toLocaleString('ja-JP'))}</span><b>${x.kanaPerSec.toFixed(2)} 字/秒</b><span>正確率 ${(x.accuracy * 100).toFixed(1)}%</span><span>${x.mode === 'practice' ? '練習' : x.mode === 'patch' ? 'パッチ' : '計測'}</span></div>`
+      ).join('');
+    }).catch((err) => {
+      console.warn('failed to load recent sessions', err);
+      if (round === completedRound) $('recent-sessions').textContent = `今回 ${r.kanaPerSec.toFixed(2)} 字/秒 · 正確率 ${(r.accuracy * 100).toFixed(1)}%（履歴を読み込めませんでした）`;
+    });
+
+  $('r-title').textContent = isPatch ? '[ PATCH COMPLETE ]' : '[ RUN COMPLETE ]';
+  $('r-mode').textContent = isPatch ? `パッチ練習${interrupted ? '（中断あり）' : ''}` : interrupted ? '練習扱い（中断あり）' : '60秒ベンチマーク';
 
   $('r-speed').innerHTML = `${r.kanaPerSec.toFixed(2)}<small style="font-size:22px"> 字/秒</small>`;
   $('r-kpm').textContent = `${Math.round(r.keysPerMin)} 打鍵/分（参考）`;
@@ -230,25 +437,35 @@ function endRound() {
   $('r-layers').textContent = `破った層 ${r.layers} / 防壁 ${r.firewalls}`;
 
   const near = $('r-near');
-  if (!best) near.innerHTML = `初回記録 <b>${r.kanaPerSec.toFixed(2)} 字/秒</b>。ここから自分を超えていく。`;
+  if (!eligibleForBest) near.innerHTML = best ? `ベスト <b>${best.toFixed(2)} 字/秒</b>　・　${isPatch ? 'パッチ' : '練習'}結果は自己ベストの対象外` : '練習結果を保存しました。自己ベストはベンチマークで記録します。';
+  else if (!best) near.innerHTML = `初回記録 <b>${r.kanaPerSec.toFixed(2)} 字/秒</b>。ここから自分を超えていく。`;
   else if (r.kanaPerSec > best) near.innerHTML = `<b>自己ベスト更新</b>　+${(r.kanaPerSec - best).toFixed(2)} 字/秒（前回ベスト ${best.toFixed(2)}）`;
-  else near.innerHTML = `自己ベストまで あと <b>${(best - r.kanaPerSec).toFixed(2)}</b> 字/秒（ベスト ${best.toFixed(2)}）`;
+  else if (r.kanaPerSec === best) near.innerHTML = `<b>自己ベストタイ</b>　${best.toFixed(2)} 字/秒`;
+  else if (r.kanaPerSec >= best * 0.97) near.innerHTML = `自己ベストまで あと <b>${(best - r.kanaPerSec).toFixed(2)}</b> 字/秒（ベスト ${best.toFixed(2)}）`;
+  else near.innerHTML = `ベスト <b>${best.toFixed(2)} 字/秒</b>`;
 
   const vuln = $('r-vuln');
+  const missedKeySamples = r.missedKey ? round.log.filter((e) => (e.correct ? e.key : e.intended) === r.missedKey!.key).length : 0;
   if (r.slowBigram) {
-    vuln.innerHTML = `VULN 検出：<code>${esc(r.slowBigram.pair)}</code> の遷移が平均より <code>+${Math.round(r.slowBigram.excessMs)}ms</code>（${r.slowBigram.count}回）`;
+    vuln.innerHTML = `VULN 検出：<code>${esc(r.slowBigram.pair)}</code> の遷移が中央値より <code>+${Math.round(r.slowBigram.excessMs)}ms</code>（サンプル ${r.slowBigram.count} 回）`;
   } else if (r.missedKey) {
-    vuln.innerHTML = `VULN 検出：<code>${esc(r.missedKey.key)}</code> の手前でミス ${r.missedKey.count} 回`;
+    vuln.innerHTML = `VULN 検出：<code>${esc(r.missedKey.key)}</code> の手前でミス ${r.missedKey.count} 回（サンプル ${missedKeySamples} 打鍵）`;
   } else {
     vuln.textContent = 'VULN 検出なし：データが少ないか、目立った弱点なし';
   }
-  if (r.slowBigram && r.missedKey) vuln.innerHTML += `　／　<code>${esc(r.missedKey.key)}</code> の手前でミス ${r.missedKey.count} 回`;
+  if (r.slowBigram && r.missedKey) vuln.innerHTML += `　／　<code>${esc(r.missedKey.key)}</code> の手前でミス ${r.missedKey.count} 回（サンプル ${missedKeySamples} 打鍵）`;
   showOverlay('result-screen');
 }
 
 function toTitle() {
   mode = 'title';
   round = null;
+  settingsOpen = false;
+  clearTimeout(errTimer);
+  clearTimeout(popTimer);
+  els.readyHelp.classList.add('hidden');
+  els.chainPop.classList.remove('visible');
+  els.ime.classList.add('hidden');
   renderTitle();
   showOverlay('title-screen');
 }
@@ -256,20 +473,39 @@ function toTitle() {
 // ---- input ----------------------------------------------------------------
 
 window.addEventListener('keydown', (e) => {
+  if (e.target instanceof HTMLInputElement && e.target !== els.volume) return;
+  if (e.target instanceof HTMLButtonElement) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'Tab' || e.key === ' ') e.preventDefault();
+
+  // Paused keys are handled before composition or character input can reach Round.
+  if (mode === 'play' && round?.paused) {
+    if (e.repeat) return;
+    if (e.key === ' ' || e.key === 'Enter') resumeRound(e.timeStamp);
+    else if (e.key.toLowerCase() === 'r') startRound(lastRun);
+    else if (e.key.toLowerCase() === 'q' || e.key === 'Escape') toTitle();
+    return;
+  }
+  if (mode === 'title' && settingsOpen) {
+    if (e.repeat) return;
+    if (e.key === '1') cycleEffect('shake');
+    else if (e.key === '2') cycleEffect('flash');
+    else if (e.key === '3') cycleEffect('motion');
+    else if (e.key.toLowerCase() === 's' || e.key === 'Escape' || e.key === 'Enter') closeSettings();
+    return;
+  }
   if (e.isComposing || e.key === 'Process' || e.keyCode === 229) {
     els.ime.classList.remove('hidden');
     e.preventDefault();
     return;
   }
   els.ime.classList.add('hidden');
-  if (e.metaKey || e.ctrlKey || e.altKey) return;
-
-  if (e.key === 'Tab' || e.key === ' ') e.preventDefault();
   audio.ensure();
 
   if (mode === 'report') {
     if (e.repeat) return;
     if (e.key === 'Escape' || e.key === 'r' || e.key === 'R') closeReport();
+    else if (/^[1-8]$/.test(e.key)) startPatch(Number(e.key) - 1);
     else if (e.key === 'h' || e.key === 'H') {
       reportMetric = reportMetric === 'latency' ? 'miss' : 'latency';
       void openReport();
@@ -282,18 +518,21 @@ window.addEventListener('keydown', (e) => {
     if (e.key === ' ' || e.key === 'Enter') startRound();
     else if (e.key === 'Tab') {
       dictIdx = (dictIdx + 1) % DICTIONARIES.length;
+      reportRequest++;
+      report = null;
       store.set('dict', dictIdx);
       renderTitle();
     } else if (e.key === 'm' || e.key === 'M') {
-      audio.enabled = !audio.enabled;
-      store.set('sound', audio.enabled);
-      renderTitle();
+      toggleSound();
+    } else if (e.key === 's' || e.key === 'S') {
+      settingsOpen = true;
+      showOverlay('settings-screen');
     }
     return;
   }
   if (mode === 'result') {
     if (e.repeat) return;
-    if (e.key === ' ' || e.key === 'Enter') startRound();
+    if (e.key === ' ' || e.key === 'Enter') startRound(lastRun);
     else if (e.key === 'Escape') toTitle();
     else if (e.key === 'r' || e.key === 'R') void openReport();
     return;
@@ -301,7 +540,10 @@ window.addEventListener('keydown', (e) => {
 
   // play
   if (!round) return;
-  if (e.key === 'Escape') return toTitle();
+  if (e.key === 'Escape') {
+    if (!e.repeat) pauseRound(e.timeStamp);
+    return;
+  }
   if (e.repeat || e.key.length !== 1) return;
   if (round.finished) return;
   if (e.key === ' ' && !round.session.expected.includes(' ')) return;
@@ -311,7 +553,7 @@ window.addEventListener('keydown', (e) => {
   if (out.accepted) {
     audio.key(round.stage, out.critical);
     scene.hit(out.critical, out.criticalGainMs);
-    els.chain.animate([{ transform: 'scale(1.12)', color: '#ffffff' }, { transform: 'scale(1)' }], { duration: 140, easing: 'ease-out' });
+    if (effects.motion > 0) els.chain.animate([{ transform: `scale(${1 + 0.12 * effects.motion})` }, { transform: 'scale(1)' }], { duration: 140, easing: 'ease-out' });
     if (out.wordDone) {
       audio.word(round.stage);
       scene.layerBreak();
@@ -328,14 +570,26 @@ window.addEventListener('keydown', (e) => {
     audio.miss();
     scene.miss();
     els.edge.classList.remove('on');
-    void els.edge.offsetWidth;
-    els.edge.classList.add('on');
+    if (effects.flash > 0) {
+      void els.edge.offsetWidth;
+      els.edge.classList.add('on');
+    }
     renderPanel(true);
     clearTimeout(errTimer);
     errTimer = window.setTimeout(() => mode === 'play' && renderPanel(), 160);
   }
+  const announcements: string[] = [];
+  if (out.accepted && [10, 30, 50, 100, 200].includes(round.chain)) announcements.push(`CHAIN ${round.chain}!`);
+  if (out.stageChanged) announcements.push(`OVERCLOCK ${['0', 'I', 'II', 'III'][round.stage]}`);
+  announce(announcements);
   renderHud();
-  renderTrace();
+  renderAccuracy();
+  renderClock(e.timeStamp);
+});
+
+window.addEventListener('blur', (e) => pauseRound(e.timeStamp));
+document.addEventListener('visibilitychange', (e) => {
+  if (document.hidden) pauseRound(e.timeStamp || performance.now());
 });
 
 // ---- loop -----------------------------------------------------------------
@@ -344,10 +598,9 @@ let lastFrame = performance.now();
 function loop(now: number) {
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
-  if (mode === 'play' && round) {
+  if (mode === 'play' && round && !round.paused) {
     round.tick(now, dt);
     renderClock(now);
-    if (Math.random() < 0.2) renderTrace();
     if (round.finished) endRound();
   }
   scene.frame(now);
@@ -355,5 +608,7 @@ function loop(now: number) {
 }
 requestAnimationFrame(loop);
 
+applyEffects();
+renderAccuracy();
 renderTitle();
 showOverlay('title-screen');

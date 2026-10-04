@@ -20,7 +20,7 @@ const PINK = '255,88,200';
 const RED = '255,80,100';
 const WHITE = '235,255,250';
 
-interface Packet { from: P2; to: P2; t: number; dur: number; critical: boolean }
+interface Packet { from: P2; to: P2; t: number; dur: number; critical: boolean; generation: number }
 interface Spark { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; len: number }
 interface Shard { pts: P2[]; x: number; y: number; vx: number; vy: number; rot: number; vr: number; life: number; max: number; color: string }
 interface Crack { pts: P2[]; born: number } // relative to cube center, in units of cube radius
@@ -39,31 +39,46 @@ const FACES: number[][] = [
   [0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [1, 2, 6, 5], [0, 3, 7, 4],
 ];
 
+const unit = (v: number) => Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0;
+const points = (n: number): P2[] => Array.from({ length: n }, () => [0, 0]);
+const EDGE_WIDTHS = [9, 4, 1.6];
+const CRACK_STROKES = [[5, 0.2], [1.5, 0.95]] as const;
+const PACKET_STROKES = [[7, 0.25], [2, 1]] as const;
+// Stable compaction avoids fresh particle arrays on every frame.
+function retain<T>(items: T[], keep: (item: T) => boolean) {
+  let n = 0;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (keep(item)) items[n++] = item;
+  }
+  items.length = n;
+}
+
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
-function hull(points: P2[]): P2[] {
-  const p = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+function hull(points: P2[], sorted: P2[], out: P2[]) {
+  for (let i = 0; i < points.length; i++) sorted[i] = points[i];
+  sorted.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   const cross = (o: P2, a: P2, b: P2) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const lower: P2[] = [];
-  for (const q of p) {
-    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop();
-    lower.push(q);
+  out.length = 0;
+  for (const q of sorted) {
+    while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], q) <= 0) out.pop();
+    out.push(q);
   }
-  const upper: P2[] = [];
-  for (let i = p.length - 1; i >= 0; i--) {
-    const q = p[i];
-    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop();
-    upper.push(q);
+  const upperStart = out.length + 1;
+  for (let i = sorted.length - 2; i >= 0; i--) {
+    const q = sorted[i];
+    while (out.length >= upperStart && cross(out[out.length - 2], out[out.length - 1], q) <= 0) out.pop();
+    out.push(q);
   }
-  upper.pop();
-  lower.pop();
-  return lower.concat(upper);
+  out.pop();
 }
 
 export class Scene {
   private ctx: CanvasRenderingContext2D;
   private last = 0;
   private time = 0; // world time, frozen during hit-stop
+  private motionTime = 0; // separate rotation clock; cracks age even with motion disabled
   private hitStop = 0;
   private shake = 0;
   private flash = 0;
@@ -71,6 +86,8 @@ export class Scene {
   private tunnelZ = 0;
   private speed = 0;
   private stage = 0;
+  private generation = 0;
+  private effects = { shake: 1, flash: 1, motion: 1 };
   private damage = 0; // 0 = intact, 1 = about to break
   private kick = 0;
   private spawnT = 1; // firewall approach animation 0..1
@@ -83,6 +100,17 @@ export class Scene {
   private drifters: Drifter[] = [];
   private cubeRadius = 230;
   private hullPts: P2[] = [];
+  private hullSorted: P2[] = [];
+  private cubePts = points(8);
+  private cubeRot: V3[] = Array.from({ length: 8 }, () => [0, 0, 0]);
+  private driftPts = points(8);
+  private rotated: V3 = [0, 0, 0];
+  private projectA: P2 = [0, 0];
+  private projectB: P2 = [0, 0];
+  private tunnelPts = Array.from({ length: 11 }, () => points(6));
+  private tunnelDepths: number[] = Array(11).fill(0);
+  private faceOrder = FACES.map((_, i) => ({ i, z: 0 }));
+  private coreGradients = new Map<number, CanvasGradient>();
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d', { alpha: false })!;
@@ -90,18 +118,31 @@ export class Scene {
   }
 
   resize(scale: number) {
-    const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = Math.round(W * scale * dpr);
-    this.canvas.height = Math.round(H * scale * dpr);
-    this.ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+    // Cap the backing store at 4K while retaining stage-space coordinates.
+    const pixelScale = Math.min(scale * (window.devicePixelRatio || 1), 2);
+    this.canvas.width = Math.max(1, Math.round(W * pixelScale));
+    this.canvas.height = Math.max(1, Math.round(H * pixelScale));
+    this.ctx.setTransform(this.canvas.width / W, 0, 0, this.canvas.height / H, 0, 0);
+    this.coreGradients.clear();
   }
 
   setStage(stage: number) { this.stage = stage; }
   setDamage(d: number) { this.damage = d; }
 
+  setEffects(e: { shake: number; flash: number; motion: number }) {
+    this.effects.shake = unit(e.shake);
+    this.effects.flash = unit(e.flash);
+    this.effects.motion = unit(e.motion);
+  }
+
   reset() {
-    this.packets = []; this.sparks = []; this.shards = []; this.cracks = []; this.texts = []; this.rings = [];
-    this.damage = 0; this.spawnT = 1; this.stage = 0;
+    this.packets.length = this.sparks.length = this.shards.length = this.cracks.length = this.texts.length = this.rings.length = 0;
+    this.speed = this.shake = this.flash = this.missFlash = this.kick = this.hitStop = 0;
+    this.damage = this.stage = this.generation = 0;
+    this.last = this.time = this.motionTime = this.tunnelZ = 0;
+    this.spawnT = 1;
+    this.cubeRadius = 230;
+    this.hullPts.length = 0;
   }
 
   /** Accepted keystroke: fire a packet at the firewall. */
@@ -112,7 +153,14 @@ export class Scene {
       const a = rand(0, Math.PI * 2);
       const r = Math.sqrt(Math.random()) * this.cubeRadius * 0.6;
       const to: P2 = [CX + Math.cos(a) * r, CY + Math.sin(a) * r];
-      this.packets.push({ from, to, t: 0, dur: critical ? 0.07 : 0.085, critical });
+      this.packets.push({ from, to, t: 0, dur: critical ? 0.07 : 0.085, critical, generation: this.generation });
+      // Visible on the first frame, before the packet reaches the firewall.
+      const color = critical ? PINK : CYAN;
+      this.rings.push({ r: 2, life: 0, max: 0.1, color, grow: 7, at: from });
+      const angle = rand(-Math.PI, 0);
+      const speed = rand(35, 80);
+      this.sparks.push({ x: from[0], y: from[1], vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 0, max: 0.09, color, len: rand(3, 6) });
     }
     if (critical) {
       const p = this.packets[this.packets.length - 1].to;
@@ -137,6 +185,7 @@ export class Scene {
 
   /** The whole firewall is destroyed: shatter, flash, rush forward. */
   breach() {
+    this.generation++;
     this.hitStop = 0.06;
     this.flash = 1;
     this.shake = 18;
@@ -145,21 +194,24 @@ export class Scene {
     this.rings.push({ r: this.cubeRadius, life: 0, max: 0.7, color: PINK, grow: 520 });
     this.rings.push({ r: this.cubeRadius * 0.6, life: 0, max: 0.55, color: CYAN, grow: 420 });
     for (let i = 0; i < 22; i++) this.spark(CX + rand(-40, 40), CY + rand(-40, 40), rand(700, 1600), Math.random() < 0.5 ? CYAN : PINK, 0.6);
-    this.cracks = [];
+    this.cracks.length = 0;
     this.damage = 0;
-    this.spawnT = 0;
+    this.spawnT = this.effects.motion === 0 ? 1 : 0;
   }
 
   frame(now: number) {
     const dt = this.last ? Math.min(0.05, (now - this.last) / 1000) : 0.016;
     this.last = now;
-    const worldDt = this.hitStop > 0 ? 0 : dt;
+    const worldDt = this.hitStop > 0 ? dt * (1 - this.effects.motion) : dt;
     this.hitStop = Math.max(0, this.hitStop - dt);
     this.time += worldDt;
+    this.motionTime += worldDt * this.effects.motion;
 
     // motion
-    this.speed += (60 + this.stage * 25 - this.speed) * Math.min(1, dt * 2.2);
-    this.tunnelZ = (this.tunnelZ + this.speed * worldDt) % 420;
+    const cruise = 60 + this.stage * 25;
+    this.speed += (cruise - this.speed) * Math.min(1, dt * 2.2);
+    const tunnelSpeed = this.speed * this.effects.motion;
+    this.tunnelZ = (this.tunnelZ + tunnelSpeed * worldDt) % 420;
     this.shake *= Math.pow(0.0008, dt);
     this.flash = Math.max(0, this.flash - dt * 2.8);
     this.missFlash = Math.max(0, this.missFlash - dt * 6);
@@ -171,12 +223,12 @@ export class Scene {
     ctx.fillStyle = '#03070b';
     ctx.fillRect(0, 0, W, H);
 
-    const sx = (Math.random() - 0.5) * this.shake;
-    const sy = (Math.random() - 0.5) * this.shake;
+    const sx = (Math.random() - 0.5) * this.shake * this.effects.shake;
+    const sy = (Math.random() - 0.5) * this.shake * this.effects.shake;
     ctx.save();
     ctx.translate(sx, sy);
 
-    this.drawTunnel(worldDt);
+    this.drawTunnel(worldDt, tunnelSpeed);
     this.drawCube();
     this.drawCracks();
     ctx.restore();
@@ -188,9 +240,9 @@ export class Scene {
     this.updateRings(dt);
     this.updateTexts(dt);
 
-    if (this.flash > 0) {
+    if (this.flash > 0 && this.effects.flash > 0) {
       ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = `rgba(${WHITE},${this.flash * 0.16})`;
+      ctx.fillStyle = `rgba(${WHITE},${this.flash * this.effects.flash * 0.16})`;
       ctx.fillRect(0, 0, W, H);
     }
     ctx.globalCompositeOperation = 'source-over';
@@ -198,29 +250,32 @@ export class Scene {
 
   // ---- tunnel -------------------------------------------------------------
 
-  private project(x: number, y: number, z: number): P2 {
-    return [CX + (x * FOCAL) / z, CY + (y * FOCAL) / z];
+  private project(x: number, y: number, z: number, out: P2): P2 {
+    out[0] = CX + (x * FOCAL) / z;
+    out[1] = CY + (y * FOCAL) / z;
+    return out;
   }
 
-  private drawTunnel(dt: number) {
+  private drawTunnel(dt: number, speed: number) {
     const ctx = this.ctx;
     ctx.globalCompositeOperation = 'lighter';
     const R = 1250;
-    const rings: P2[][] = [];
-    const zs: number[] = [];
+    const rings = this.tunnelPts;
+    const zs = this.tunnelDepths;
+    let count = 0;
     for (let i = 0; i < 11; i++) {
       const z = 260 + i * 420 - this.tunnelZ;
       if (z < 120) continue;
-      zs.push(z);
-      const pts: P2[] = [];
+      zs[count] = z;
+      const pts = rings[count++];
       for (let k = 0; k < 6; k++) {
         const a = (Math.PI / 3) * k + Math.PI / 6;
-        pts.push(this.project(Math.cos(a) * R * 1.35, Math.sin(a) * R, z));
+        this.project(Math.cos(a) * R * 1.35, Math.sin(a) * R, z, pts[k]);
       }
-      rings.push(pts);
     }
     const oc = this.stage / 3;
-    rings.forEach((pts, i) => {
+    for (let i = 0; i < count; i++) {
+      const pts = rings[i];
       const a = Math.max(0, 0.38 - zs[i] / 12000) * (1 + oc * 0.6);
       ctx.strokeStyle = `rgba(${CYAN},${a * 0.55})`;
       ctx.lineWidth = 1;
@@ -228,14 +283,14 @@ export class Scene {
       pts.forEach((p, k) => (k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
       ctx.closePath();
       ctx.stroke();
-    });
+    }
     // longitudinal edges
     for (let k = 0; k < 6; k++) {
       ctx.strokeStyle = `rgba(${CYAN},${0.12 + oc * 0.08})`;
       ctx.beginPath();
       const a = (Math.PI / 3) * k + Math.PI / 6;
-      const near = this.project(Math.cos(a) * R * 1.35, Math.sin(a) * R, 120);
-      const far = this.project(Math.cos(a) * R * 1.35, Math.sin(a) * R, 5000);
+      const near = this.project(Math.cos(a) * R * 1.35, Math.sin(a) * R, 120, this.projectA);
+      const far = this.project(Math.cos(a) * R * 1.35, Math.sin(a) * R, 5000, this.projectB);
       ctx.moveTo(near[0], near[1]);
       ctx.lineTo(far[0], far[1]);
       ctx.stroke();
@@ -243,8 +298,8 @@ export class Scene {
     // floor grid lines converging
     ctx.strokeStyle = `rgba(${CYAN},0.06)`;
     for (let i = -8; i <= 8; i++) {
-      const a = this.project(i * 260, 900, 140);
-      const b = this.project(i * 260, 900, 5000);
+      const a = this.project(i * 260, 900, 140, this.projectA);
+      const b = this.project(i * 260, 900, 5000, this.projectB);
       ctx.beginPath();
       ctx.moveTo(a[0], a[1]);
       ctx.lineTo(b[0], b[1]);
@@ -252,21 +307,23 @@ export class Scene {
     }
     // drifting wire cubes
     for (const d of this.drifters) {
-      d.z -= this.speed * dt * 0.9;
-      d.rx += dt * 0.2;
-      d.ry += dt * 0.3;
+      d.z -= speed * dt * 0.9;
+      d.rx += dt * 0.2 * this.effects.motion;
+      d.ry += dt * 0.3 * this.effects.motion;
       if (d.z < 150) Object.assign(d, this.newDrifter(rand(3800, 4600)));
-      const [px, py] = this.project(d.x, d.y, d.z);
+      const [px, py] = this.project(d.x, d.y, d.z, this.projectA);
       // keep clear of the HUD columns and the top bar
       const side = Math.max(0, Math.abs(px - 960) - 420) / 140;
       const top = Math.max(0, 170 - py) / 80;
       const hudFade = Math.max(0, 1 - Math.max(side, top));
       const alpha = Math.min(1, (4600 - d.z) / 1200) * Math.min(1, (d.z - 150) / 300) * 0.4 * hudFade;
       if (alpha <= 0.01) continue;
-      const pts = CUBE.map(([x, y, z]) => {
-        const [x1, y1, z1] = this.rotate([x * d.size, y * d.size, z * d.size], d.rx, d.ry);
-        return this.project(d.x + x1, d.y + y1, d.z + z1);
-      });
+      const pts = this.driftPts;
+      for (let i = 0; i < CUBE.length; i++) {
+        const [x, y, z] = CUBE[i];
+        this.rotate(x * d.size, y * d.size, z * d.size, d.rx, d.ry, this.rotated);
+        this.project(d.x + this.rotated[0], d.y + this.rotated[1], d.z + this.rotated[2], pts[i]);
+      }
       ctx.strokeStyle = `rgba(${d.color},${alpha})`;
       ctx.beginPath();
       for (const [a, b] of EDGES) {
@@ -286,42 +343,51 @@ export class Scene {
     return { x, y, z, size: rand(50, 110), rx: rand(0, 6), ry: rand(0, 6), color: Math.random() < 0.3 ? PINK : CYAN };
   }
 
-  private rotate([x, y, z]: V3, ax: number, ay: number): V3 {
+  private rotate(x: number, y: number, z: number, ax: number, ay: number, out: V3) {
     const cy = Math.cos(ay), sy = Math.sin(ay);
     const x1 = x * cy + z * sy;
     const z1 = -x * sy + z * cy;
     const cx = Math.cos(ax), sx = Math.sin(ax);
-    return [x1, y * cx - z1 * sx, y * sx + z1 * cx];
+    out[0] = x1;
+    out[1] = y * cx - z1 * sx;
+    out[2] = y * sx + z1 * cx;
   }
 
   // ---- firewall cube -------------------------------------------------------
 
   private drawCube() {
     const ctx = this.ctx;
-    const t = this.time;
+    const t = this.motionTime;
     // near the body-diagonal view the cube reads as a hexagon (like the concept art)
     const ay = Math.PI / 4 + Math.sin(t * 0.35) * 0.22 + t * 0.05;
     const ax = 0.6155 + Math.sin(t * 0.27) * 0.08;
-    const approach = 1 - Math.pow(1 - this.spawnT, 3);
-    const scale = (0.25 + 0.75 * approach) * (1 - this.kick * 0.06);
+    const approach = 1 - Math.pow(1 - this.spawnT, 3) * this.effects.motion;
+    const scale = (0.25 + 0.75 * approach) * (1 - this.kick * this.effects.motion * 0.06);
     const size = 132 * scale;
     this.cubeRadius = 230 * scale;
 
-    const rot = CUBE.map((v) => this.rotate([v[0] * size, v[1] * size, v[2] * size], ax, ay));
-    const pts: P2[] = rot.map(([x, y, z]) => [CX + (x * 900) / (900 + z), CY + (y * 900) / (900 + z)]);
-    this.hullPts = hull(pts);
+    const rot = this.cubeRot;
+    const pts = this.cubePts;
+    for (let i = 0; i < CUBE.length; i++) {
+      const v = CUBE[i];
+      this.rotate(v[0] * size, v[1] * size, v[2] * size, ax, ay, rot[i]);
+      this.project(rot[i][0], rot[i][1], 900 + rot[i][2], pts[i]);
+    }
+    hull(pts, this.hullSorted, this.hullPts);
 
-    // faces, back to front
-    const order = FACES.map((f, i) => ({ i, z: f.reduce((s, k) => s + rot[k][2], 0) / 4 })).sort((a, b) => b.z - a.z);
+    // faces, back to front; retain the ordering buffer across frames
+    const order = this.faceOrder;
+    for (const face of order) {
+      const f = FACES[face.i];
+      face.z = (rot[f[0]][2] + rot[f[1]][2] + rot[f[2]][2] + rot[f[3]][2]) / 4;
+    }
+    order.sort((a, b) => b.z - a.z);
     ctx.globalCompositeOperation = 'source-over';
     for (const { i, z } of order) {
       const f = FACES[i];
       const front = z < 0;
-      const g = ctx.createLinearGradient(pts[f[0]][0], pts[f[0]][1], pts[f[2]][0], pts[f[2]][1]);
-      const pinkMix = this.damage * 0.5;
-      g.addColorStop(0, `rgba(12,60,70,${front ? 0.5 : 0.25})`);
-      g.addColorStop(1, `rgba(${Math.round(40 + 120 * pinkMix)},20,${Math.round(50 + 40 * pinkMix)},${front ? 0.35 + pinkMix * 0.3 : 0.18})`);
-      ctx.fillStyle = g;
+      // Average the old gradient stops for a similar translucent face tint.
+      ctx.fillStyle = `rgba(${Math.round(26 + 30 * this.damage)},40,${Math.round(60 + 10 * this.damage)},${front ? 0.425 + this.damage * 0.075 : 0.215})`;
       ctx.beginPath();
       f.forEach((k, j) => (j ? ctx.lineTo(pts[k][0], pts[k][1]) : ctx.moveTo(pts[k][0], pts[k][1])));
       ctx.closePath();
@@ -330,10 +396,13 @@ export class Scene {
 
     // glowing edges
     ctx.globalCompositeOperation = 'lighter';
-    const col = this.missFlash > 0.2 ? RED : CYAN;
+    const flicker = this.missFlash > 0.2 ? this.effects.flash : 0;
+    const col = flicker === 1 ? RED : flicker === 0 ? CYAN
+      : `${Math.round(101 + 154 * flicker)},${Math.round(245 - 165 * flicker)},${Math.round(237 - 137 * flicker)}`;
     const glow = 0.18 + this.stage * 0.06 + this.kick * 0.3;
-    for (const [w, a] of [[9, glow * 0.5], [4, glow], [1.6, 0.95]] as const) {
-      ctx.lineWidth = w;
+    for (let i = 0; i < EDGE_WIDTHS.length; i++) {
+      const a = i === 0 ? glow * 0.5 : i === 1 ? glow : 0.95;
+      ctx.lineWidth = EDGE_WIDTHS[i];
       ctx.strokeStyle = `rgba(${col},${a * approach})`;
       ctx.beginPath();
       for (const [a1, b1] of EDGES) {
@@ -345,14 +414,26 @@ export class Scene {
 
     // damage: pink core glow grows as the firewall weakens
     if (this.damage > 0) {
-      const rg = ctx.createRadialGradient(CX + 40, CY + 40, 10, CX + 40, CY + 40, this.cubeRadius);
-      rg.addColorStop(0, `rgba(${PINK},${0.25 * this.damage})`);
-      rg.addColorStop(1, `rgba(${PINK},0)`);
+      const radius = Math.max(8, Math.round(this.cubeRadius / 8) * 8);
+      let rg = this.coreGradients.get(radius);
+      if (!rg) {
+        // Cache in stage space, independent of the current shake offset.
+        ctx.save();
+        ctx.setTransform(this.canvas.width / W, 0, 0, this.canvas.height / H, 0, 0);
+        rg = ctx.createRadialGradient(CX + 40, CY + 40, 10, CX + 40, CY + 40, radius);
+        ctx.restore();
+        rg.addColorStop(0, `rgba(${PINK},0.25)`);
+        rg.addColorStop(1, `rgba(${PINK},0)`);
+        this.coreGradients.set(radius, rg);
+      }
+      ctx.save();
+      ctx.globalAlpha = this.damage;
       ctx.fillStyle = rg;
       ctx.beginPath();
       this.hullPts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
       ctx.closePath();
       ctx.fill();
+      ctx.restore();
     }
     ctx.lineWidth = 1;
   }
@@ -367,7 +448,7 @@ export class Scene {
     ctx.clip();
     ctx.globalCompositeOperation = 'lighter';
     const R = this.cubeRadius;
-    for (const [w, a] of [[5, 0.2], [1.5, 0.95]] as const) {
+    for (const [w, a] of CRACK_STROKES) {
       ctx.lineWidth = w;
       for (const c of this.cracks) {
         const age = this.time - c.born;
@@ -407,25 +488,29 @@ export class Scene {
   private updatePackets(dt: number) {
     const ctx = this.ctx;
     ctx.globalCompositeOperation = 'lighter';
-    this.packets = this.packets.filter((p) => {
+    retain(this.packets, (p) => {
       p.t += dt;
       const k = Math.min(1, p.t / p.dur);
       const e = k * k;
-      const x = p.from[0] + (p.to[0] - p.from[0]) * e;
-      const y = p.from[1] + (p.to[1] - p.from[1]) * e;
+      const motion = this.effects.motion;
+      const x = p.to[0] + (p.from[0] - p.to[0]) * (1 - e) * motion;
+      const y = p.to[1] + (p.from[1] - p.to[1]) * (1 - e) * motion;
       const back = Math.max(0, e - 0.25);
-      const bx = p.from[0] + (p.to[0] - p.from[0]) * back;
-      const by = p.from[1] + (p.to[1] - p.from[1]) * back;
+      const bx = motion === 0 ? x - 12 : p.to[0] + (p.from[0] - p.to[0]) * (1 - back) * motion;
+      const by = motion === 0 ? y : p.to[1] + (p.from[1] - p.to[1]) * (1 - back) * motion;
+      const current = p.generation === this.generation;
+      const fade = (current ? 1 : 1 - k) * (motion === 0 ? k : 1);
       const col = p.critical ? PINK : CYAN;
-      for (const [w, a] of [[7, 0.25], [2, 1]] as const) {
+      for (const [w, a] of PACKET_STROKES) {
         ctx.lineWidth = w;
-        ctx.strokeStyle = `rgba(${col},${a})`;
+        ctx.strokeStyle = `rgba(${col},${a * fade})`;
         ctx.beginPath();
         ctx.moveTo(bx, by);
         ctx.lineTo(x, y);
         ctx.stroke();
       }
       if (k >= 1) {
+        if (!current) return false;
         this.addCrack(p.to);
         const n = p.critical ? 14 : 7;
         for (let i = 0; i < n; i++) this.spark(p.to[0], p.to[1], rand(150, p.critical ? 700 : 420), p.critical ? PINK : CYAN, 0.3);
@@ -446,10 +531,10 @@ export class Scene {
     const ctx = this.ctx;
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineWidth = 1.5;
-    this.sparks = this.sparks.filter((s) => {
+    retain(this.sparks, (s) => {
       s.life += dt;
-      s.x += s.vx * dt;
-      s.y += s.vy * dt;
+      s.x += s.vx * dt * this.effects.motion;
+      s.y += s.vy * dt * this.effects.motion;
       s.vx *= Math.pow(0.02, dt);
       s.vy *= Math.pow(0.02, dt);
       const a = 1 - s.life / s.max;
@@ -484,12 +569,12 @@ export class Scene {
   private updateShards(dt: number) {
     const ctx = this.ctx;
     ctx.globalCompositeOperation = 'lighter';
-    this.shards = this.shards.filter((s) => {
+    retain(this.shards, (s) => {
       s.life += dt;
-      s.x += s.vx * dt;
-      s.y += s.vy * dt;
+      s.x += s.vx * dt * this.effects.motion;
+      s.y += s.vy * dt * this.effects.motion;
       s.vy += 300 * dt;
-      s.rot += s.vr * dt;
+      s.rot += s.vr * dt * this.effects.motion;
       const a = 1 - s.life / s.max;
       if (a <= 0) return false;
       const c = Math.cos(s.rot), sn = Math.sin(s.rot);
@@ -512,19 +597,20 @@ export class Scene {
   private updateRings(dt: number) {
     const ctx = this.ctx;
     ctx.globalCompositeOperation = 'lighter';
-    this.rings = this.rings.filter((r) => {
+    retain(this.rings, (r) => {
       r.life += dt;
       const k = r.life / r.max;
       if (k >= 1) return false;
-      const at = r.at ?? [CX, CY];
-      const rad = r.r + k * r.grow;
+      const x0 = r.at ? r.at[0] : CX;
+      const y0 = r.at ? r.at[1] : CY;
+      const rad = r.r + k * r.grow * this.effects.motion;
       ctx.strokeStyle = `rgba(${r.color},${(1 - k) * 0.8})`;
       ctx.lineWidth = 2 * (1 - k) + 0.5;
       ctx.beginPath();
       for (let i = 0; i <= 6; i++) {
         const a = (Math.PI / 3) * i + Math.PI / 6;
-        const x = at[0] + Math.cos(a) * rad;
-        const y = at[1] + Math.sin(a) * rad;
+        const x = x0 + Math.cos(a) * rad;
+        const y = y0 + Math.sin(a) * rad;
         if (i) ctx.lineTo(x, y);
         else ctx.moveTo(x, y);
       }
@@ -537,13 +623,13 @@ export class Scene {
   private updateTexts(dt: number) {
     const ctx = this.ctx;
     ctx.globalCompositeOperation = 'lighter';
-    this.texts = this.texts.filter((t) => {
+    retain(this.texts, (t) => {
       t.life += dt;
       const k = t.life / t.max;
       if (k >= 1) return false;
       const a = k < 0.1 ? k / 0.1 : 1 - (k - 0.1) / 0.9;
       ctx.save();
-      ctx.translate(t.x, t.y - k * 26);
+      ctx.translate(t.x, t.y - k * 26 * this.effects.motion);
       ctx.rotate(-0.12);
       ctx.font = '600 22px Menlo, monospace';
       ctx.fillStyle = `rgba(255,214,236,${a})`;

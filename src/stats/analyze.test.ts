@@ -18,6 +18,35 @@ function repeated(from: string, to: string, dt: number, n: number): StoredKey[] 
 }
 
 describe('weakness analysis', () => {
+  it('keeps first-letter attempts and errors in the boundary stratum, never the previous word bigram', () => {
+    const report = analyze([
+      ...repeated('k', 'y', 100, 10),
+      event('a', 'x', 800, { t: 2000, correct: false, intended: 'k', wordStart: true }),
+      event('a', 'z', 850, { t: 2050, correct: false, intended: 'k', wordStart: true }),
+      event('a', 'k', 900, { t: 2100, wordStart: true, afterMiss: true }),
+      event('k', 'y', 100, { t: 2200 }),
+    ]);
+    expect(report.bigrams.map(p => `${p.from}→${p.to}`)).toEqual(['k→y']);
+    expect(report.bigrams[0].n).toBe(11);
+    expect(report.keys.find(k => k.key === 'k')).toMatchObject({ n: 3, misses: 2 });
+    expect(report.accuracy).toBeCloseTo(12 / 14);
+    expect(report.overallLatencyMs).toBe(100);
+  });
+
+  it('excludes pause intervals from overall, per-key, bigram and session timing while retaining accuracy', () => {
+    const report = analyze([
+      event('k', 'y', 100, { session: 'first' }),
+      event('k', 'y', 2000, { session: 'first', afterPause: true }),
+      event('k', 'z', 2000, { session: 'first', afterPause: true, correct: false, intended: 'y' }),
+      event('k', 'y', 200, { session: 'second' }),
+    ]);
+    expect(report.trend.map(p => p.latencyMs)).toEqual([100, 200]);
+    expect(report.trend.map(p => p.accuracy)).toEqual([2 / 3, 1]);
+    expect(report.overallLatencyMs).toBe(150);
+    expect(report.bigrams[0].latencyMs).toBeCloseTo(Math.sqrt(100 * 200));
+    expect(report.accuracy).toBe(0.75);
+  });
+
   it('ranks a frequent 120ms slower bigram first with high severity', () => {
     const report = analyze([
       ...repeated('k', 'y', 220, 200), ...repeated('j', 'o', 100, 400),

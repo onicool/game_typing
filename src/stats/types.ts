@@ -10,6 +10,12 @@ export interface StoredKey {
   wordStart: boolean;
   afterMiss: boolean;
   intended: string | null;
+  wordId?: string;
+  role?: 'ordinary' | 'weak' | 'probe';
+  target?: string | null;
+  afterPause?: boolean;
+  /** Approximate marginal selection probability of the word. */
+  prob?: number;
   mode: string;
   dict: string;
 }

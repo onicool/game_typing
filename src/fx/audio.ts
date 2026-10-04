@@ -8,12 +8,13 @@
  *   stack up with the overclock stage
  */
 
-const PROGRESSION: number[][] = [
-  [57, 60, 64], // Am
-  [53, 57, 60], // F
-  [48, 52, 55], // C
-  [55, 59, 62], // G
+const PROGRESSIONS: number[][][] = [
+  [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], // Am–F–C–G
+  [[57, 60, 64], [55, 59, 62], [53, 57, 60], [52, 56, 59]], // Am–G–F–E
+  [[50, 53, 57], [57, 60, 64], [53, 57, 60], [55, 59, 62]], // Dm–Am–F–G
 ];
+const DEFAULT_VOLUME = 0.7;
+const MASTER_GAIN = 0.55 / DEFAULT_VOLUME;
 const ARP = [0, 1, 2, 3, 4, 5, 4, 3, 2, 1]; // up-down over two octaves of chord tones
 
 const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
@@ -25,7 +26,35 @@ export class Audio {
   private noise!: AudioBuffer;
   private chordIdx = 0;
   private arpIdx = 0;
-  enabled = true;
+  private progressionIdx = 0;
+  private _enabled = true;
+  private _volume = DEFAULT_VOLUME;
+
+  get enabled(): boolean { return this._enabled; }
+  set enabled(enabled: boolean) {
+    this._enabled = enabled;
+    this.rampMaster();
+  }
+
+  get volume(): number { return this._volume; }
+  setVolume(v: number) {
+    this._volume = Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0;
+    this.rampMaster();
+  }
+
+  private rampMaster() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const gain = this.master.gain;
+    // Hold the instantaneous gain when another change interrupts a ramp.
+    if (typeof gain.cancelAndHoldAtTime === 'function') gain.cancelAndHoldAtTime(t);
+    else {
+      const current = gain.value;
+      gain.cancelScheduledValues(t);
+      gain.setValueAtTime(current, t);
+    }
+    gain.linearRampToValueAtTime(this._enabled ? this._volume * MASTER_GAIN : 0, t + 0.03);
+  }
 
   /** Must be called from a user gesture (first keydown). */
   ensure() {
@@ -42,7 +71,7 @@ export class Audio {
     comp.connect(ctx.destination);
 
     this.master = ctx.createGain();
-    this.master.gain.value = 0.55;
+    this.master.gain.value = this._enabled ? this._volume * MASTER_GAIN : 0;
     this.master.connect(comp);
 
     // feedback delay for a little neon space
@@ -68,6 +97,7 @@ export class Audio {
   }
 
   reset() {
+    this.progressionIdx = 0;
     this.chordIdx = 0;
     this.arpIdx = 0;
   }
@@ -77,7 +107,7 @@ export class Audio {
     const ctx = this.live();
     if (!ctx) return;
     const t = ctx.currentTime;
-    const chord = PROGRESSION[this.chordIdx];
+    const chord = PROGRESSIONS[this.progressionIdx][this.chordIdx];
     const step = ARP[this.arpIdx % ARP.length];
     this.arpIdx++;
     const midi = chord[step % 3] + 12 * Math.floor(step / 3) + 12;
@@ -110,7 +140,7 @@ export class Audio {
     o2.stop(t + 0.2);
 
     // tiny transient click so fast typing still feels percussive
-    this.noiseBurst(t, 0.012, 6000, 0.05, 'highpass');
+    this.noiseBurst(t, 0.01 + Math.random() * 0.003, 5400 + Math.random() * 1200, 0.022 + Math.random() * 0.008, 'highpass');
 
     if (critical) {
       const s = ctx.createOscillator();
@@ -149,9 +179,9 @@ export class Audio {
     const ctx = this.live();
     if (!ctx) return;
     const t = ctx.currentTime;
-    this.chordIdx = (this.chordIdx + 1) % PROGRESSION.length;
+    this.chordIdx = (this.chordIdx + 1) % PROGRESSIONS[this.progressionIdx].length;
     this.arpIdx = 0;
-    const chord = PROGRESSION[this.chordIdx];
+    const chord = PROGRESSIONS[this.progressionIdx][this.chordIdx];
 
     // shatter
     this.noiseBurst(t, 0.18, 3200, 0.16, 'bandpass', 900);
@@ -168,11 +198,15 @@ export class Audio {
 
   /** Whole firewall destroyed. */
   breach() {
+    // Advance even while muted so the music still follows gameplay.
+    this.progressionIdx = (this.progressionIdx + 1) % PROGRESSIONS.length;
+    this.chordIdx = 0;
+    this.arpIdx = 0;
     const ctx = this.live();
     if (!ctx) return;
     const t = ctx.currentTime;
     this.thump(t, 0.5);
-    this.noiseBurst(t, 0.6, 5000, 0.25, 'lowpass', 300);
+    this.noiseBurst(t, 0.6, 4400 + Math.random() * 1200, 0.175, 'lowpass', 250 + Math.random() * 150);
   }
 
   private live(): AudioContext | null {
