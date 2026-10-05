@@ -43,6 +43,7 @@ let mode: Mode = 'title';
 let reportReturn: Mode = 'title';
 let reportMetric: 'latency' | 'miss' = 'latency';
 let reportRequest = 0; // bumped on every open/close so a slow load cannot render over a newer one
+let reportRead: AbortController | undefined;
 let report: { data: Report; dictId: string; request: number } | null = null;
 let settingsOpen = false;
 let dictIdx = store.get('dict', 0, isDictionaryIndex(DICTIONARIES.length));
@@ -371,6 +372,9 @@ $('pause-retry').addEventListener('click', () => startRound(lastRun));
 $('pause-title-return').addEventListener('click', toTitle);
 
 async function openReport() {
+  reportRead?.abort();
+  const read = new AbortController();
+  reportRead = read;
   if (mode !== 'report') reportReturn = mode;
   mode = 'report';
   const request = ++reportRequest;
@@ -379,8 +383,11 @@ async function openReport() {
   const el = $('report');
   el.innerHTML = '<div class="eyebrow">ANALYZING…</div>';
   showOverlay('report-screen');
-  const [events, sessions] = await Promise.all([loadEvents(d.id), loadSessions(d.id)]);
-  if (request !== reportRequest || mode !== 'report' || d.id !== DICTIONARIES[dictIdx].id) return;
+  let partial = false;
+  const unavailable = () => { partial = true; };
+  const [events, sessions] = await Promise.all([loadEvents(d.id, unavailable, read.signal), loadSessions(d.id, unavailable, read.signal)]);
+  if (reportRead === read) reportRead = undefined;
+  if (read.signal.aborted || request !== reportRequest || mode !== 'report' || d.id !== DICTIONARIES[dictIdx].id) return;
   const data = analyze(events.filter((event) => event.mode !== 'patch'), { dict: d.id });
   const bySession = new Map(sessions.map((x) => [x.session, x]));
   const benchmarks = new Set(events.filter((event) => event.mode === 'benchmark').map((event) => event.session));
@@ -397,10 +404,19 @@ async function openReport() {
     .sort((a, b) => a.endedAt - b.endedAt)
     .map((x) => ({ session: x.session, kanaPerSec: x.kanaPerSec, latencyMs: NaN, accuracy: x.accuracy })));
   renderReport(el, data, d.name, reportMetric);
+  if (partial) {
+    const notice = document.createElement('p');
+    notice.className = 'jp muted';
+    notice.setAttribute('role', 'status');
+    notice.textContent = '保存領域の一部を読み込めません。取得できた記録と一時保持分だけで表示しています。確定済みログの一時保持は直近5件、未保存分はすべて保持します。復旧後に開き直してください。';
+    el.prepend(notice);
+  }
   report = { data, dictId: d.id, request };
 }
 
 function closeReport() {
+  reportRead?.abort();
+  reportRead = undefined;
   reportRequest++;
   report = null;
   mode = reportReturn;

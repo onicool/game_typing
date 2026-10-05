@@ -300,3 +300,29 @@ the observed visibility states and makes no automatic-hidden/physical OS sleep
 claim. Existing artificial blur/hidden tests are separate. Browser instrumentation,
 software rendering, shared-host scheduling and induced GC affect all measurements.
 No physical-device latency, audible sound assessment or cross-browser guarantee.
+
+## Bounded accumulated-history audit
+
+Use an immutable production preview and a fixture built with the existing Vite:
+
+```sh
+node --input-type=module -e 'import {build} from "vite"; await build({configFile:false,build:{lib:{entry:"checks/storage-fixtures.ts",formats:["es"],fileName:()=>"storage.js"},outDir:"/tmp/history-fixture",emptyOutDir:false,minify:false}})'
+python checks/history_scale_check.py http://127.0.0.1:5195 /tmp/history-new /tmp/history-fixture/storage.js
+python checks/history_fallback_check.py http://127.0.0.1:5195 /tmp/fallback-new
+```
+
+Both require fresh output directories. Only new incognito contexts and unique
+`qa-history-*` database names are used; the app name is remapped before startup.
+No real profile/database, deleteDatabase, export/upload, deployed app or source
+diagnostic hook is used. The fixture reuses existing exports only.
+
+The scale check seeds20/200/1000 independent300-key sessions, checks complete
+report sample counts three times, then measures post-GC growth over equivalent
+successful saves through the real store module. Reload preserves the same QA DB
+and proves full record counts. Saves are accelerated, not hours of real play.
+The fallback check uses native16-key long partials, blocked reads/writes, five
+committed cached rounds + eight pending rounds, recovery and exact original/reload
+records. The current UI announces partial history and clears it on healthy reopen.
+Closed report reads use AbortSignal; cancelled reads never evict pending data or
+announce a storage outage. Native large-query cancellation/max-long-task reruns
+were left for resumption after the user requested a stop; unit checks pass.

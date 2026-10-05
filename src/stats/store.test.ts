@@ -37,10 +37,12 @@ function recoveryFixture() {
   type Row = { session: string; dict: string; [key: string]: unknown };
   type Transaction = { oncomplete: null | (() => void); onabort: null | (() => void);
     error: DOMException; objectStore(name: string): { put(row: Row): void;
-      getAll(): object; index(name: string): { getAll(dict: string): object } }; abort(): void };
+      get(key: string): object; getAll(): object; getAllKeys(): object;
+      index(name: string): { getAll(dict: string): object; getAllKeys(dict: string): object } }; abort(): void };
   const disk = new Map(['events', 'sessions'].map(name => [name, new Map<string, Row>()]));
   const held: { commit(): void; abort(): void }[] = [];
   let holdWrites = false;
+  let readsUnavailable = false;
   let failure: 'throw' | 'error' | 'blocked' | null = null;
   const connections: { closed: boolean; close: () => void; onclose: null | (() => void);
     onversionchange: null | (() => void); transaction: ReturnType<typeof vi.fn> }[] = [];
@@ -51,18 +53,29 @@ function recoveryFixture() {
     const db: typeof connections[number] = { closed: false, close: vi.fn(() => { db.closed = true; }),
       onclose: null, onversionchange: null, transaction: vi.fn((_names: unknown, mode: string) => {
         if (db.closed) throw new DOMException('closed', 'InvalidStateError');
+        if (mode === 'readonly' && readsUnavailable) throw new Error('synthetic read outage');
         const staged = new Map<string, Row[]>();
+        let reads = 0;
         const tx: Transaction = { oncomplete: null, onabort: null,
           error: new DOMException('quota', 'QuotaExceededError'), abort: () => tx.onabort?.(),
           objectStore: name => {
-            const get = (dict?: string) => {
-              const request = { result: [...disk.get(name)!.values()].filter(row => dict === undefined || row.dict === dict),
-                onsuccess: null as null | (() => void) };
-              queueMicrotask(() => request.onsuccess?.());
+            const requestFor = (result: unknown) => {
+              reads++;
+              const request = { result: structuredClone(result), onsuccess: null as null | (() => void) };
+              queueMicrotask(() => {
+                request.onsuccess?.();
+                if (--reads === 0) queueMicrotask(control.commit);
+              });
               return request;
             };
+            const get = (dict?: string) => {
+              return requestFor([...disk.get(name)!.values()].filter(row => dict === undefined || row.dict === dict));
+            };
+            const keys = (dict?: string) => requestFor([...disk.get(name)!.values()]
+              .filter(row => dict === undefined || row.dict === dict).map(row => row.session));
             return { put: row => staged.set(name, [...(staged.get(name) ?? []), structuredClone(row)]),
-              getAll: () => get(), index: () => ({ getAll: dict => get(dict) }) };
+              get: key => requestFor(disk.get(name)!.get(key)), getAll: () => get(), getAllKeys: () => keys(),
+              index: () => ({ getAll: dict => get(dict), getAllKeys: dict => keys(dict) }) };
           } };
         const control = { commit: () => {
           for (const [name, rows] of staged) for (const row of rows) disk.get(name)!.set(row.session, row);
@@ -71,7 +84,7 @@ function recoveryFixture() {
         if (mode === 'readwrite' && holdWrites) held.push(control);
         // IndexedDB completes after its requests' success handlers. A single
         // microtask here wrongly resolved reads before getAll delivered rows.
-        else queueMicrotask(() => queueMicrotask(control.commit));
+        else if (mode === 'readwrite') queueMicrotask(() => queueMicrotask(control.commit));
         return tx;
       }) };
     const request = { result: db, onsuccess: null as null | (() => void),
@@ -84,7 +97,8 @@ function recoveryFixture() {
   });
   vi.stubGlobal('indexedDB', { open });
   return { disk, held, connections, requests, open,
-    fail: (kind: typeof failure) => { failure = kind; }, hold: () => { holdWrites = true; } };
+    fail: (kind: typeof failure) => { failure = kind; }, hold: () => { holdWrites = true; },
+    denyReads: (denied: boolean) => { readsUnavailable = denied; } };
 }
 
 async function untilHeld(held: ReturnType<typeof recoveryFixture>['held'], count = 1) {
@@ -93,6 +107,101 @@ async function untilHeld(held: ReturnType<typeof recoveryFixture>['held'], count
 }
 
 describe('session save status', () => {
+  const roundMeta = (i: number) => ({ ...meta, session: `round-${i}`, endedAt: i * 1000 });
+  const roundEvent = (i: number) => ({ ...event, session: roundMeta(i).session });
+
+  it('does not open a cancelled history read or discard its pending save', async () => {
+    const fixture = recoveryFixture(); fixture.fail('throw');
+    const { saveSession, loadEvents, loadSessions } = await import('./store');
+    expect(await saveSession([event], meta)).toBe('memory');
+    const read = new AbortController(); read.abort();
+    const unavailable = vi.fn();
+    expect(await loadEvents(undefined, unavailable, read.signal)).toEqual([]);
+    expect(await loadSessions(undefined, unavailable, read.signal)).toEqual([]);
+    expect(unavailable).not.toHaveBeenCalled();
+    expect(fixture.open).toHaveBeenCalledTimes(1);
+    fixture.fail(null);
+    expect(await saveSession([roundEvent(1)], roundMeta(1))).toBe('persistent');
+    expect((await loadEvents()).map(e => e.session)).toEqual([meta.session, roundMeta(1).session]);
+    expect(fixture.disk.get('events')!.size).toBe(2);
+  });
+
+  it('cancels an active readonly reader without declaring an outage or altering either store', async () => {
+    const fixture = recoveryFixture();
+    const { saveSession, loadEvents } = await import('./store');
+    for (let i = 0; i < 12; i++) await saveSession([roundEvent(i)], roundMeta(i));
+    const read = new AbortController(), unavailable = vi.fn();
+    const loading = loadEvents(undefined, unavailable, read.signal);
+    await Promise.resolve();
+    expect(fixture.connections[0].transaction).toHaveBeenLastCalledWith('events', 'readonly');
+    read.abort();
+    expect(await loading).toEqual([]);
+    expect(unavailable).not.toHaveBeenCalled();
+    expect(fixture.disk.get('events')!.size).toBe(12);
+    expect(fixture.disk.get('sessions')!.size).toBe(12);
+    expect(await loadEvents()).toEqual(Array.from({ length: 12 }, (_, i) => roundEvent(i)));
+  });
+
+  it('retains recent committed fallback while keeping the complete disk history independently readable', async () => {
+    const fixture = recoveryFixture();
+    const { saveSession, loadEvents, loadSessions } = await import('./store');
+    for (let i = 0; i < 12; i++) expect(await saveSession([roundEvent(i)], roundMeta(i))).toBe('persistent');
+    const loaded = await loadEvents();
+    expect(loaded).toHaveLength(12);
+    // The oldest entry was evicted from the cache, so this also exercises
+    // native read snapshot isolation rather than only the memory overlay.
+    loaded[0].key = 'z'; loaded[0].expected[0] = 'z';
+    expect((await loadEvents())[0]).toEqual(roundEvent(0));
+    fixture.denyReads(true);
+    const unavailable = vi.fn();
+    expect((await loadEvents(undefined, unavailable)).map(e => e.session)).toEqual([7, 8, 9, 10, 11].map(i => roundMeta(i).session));
+    expect(await loadSessions(undefined, unavailable)).toEqual([7, 8, 9, 10, 11].map(roundMeta));
+    expect(unavailable).toHaveBeenCalledTimes(2);
+    fixture.denyReads(false);
+    expect(await loadSessions()).toEqual(Array.from({ length: 12 }, (_, i) => roundMeta(i)));
+    expect(fixture.disk.get('events')!.size).toBe(12);
+  });
+
+  it('never evicts uncommitted rounds and persists the whole outage batch before limiting its cache', async () => {
+    const fixture = recoveryFixture(); fixture.fail('throw');
+    const { saveSession, loadEvents, loadSessions } = await import('./store');
+    for (let i = 0; i < 12; i++) expect(await saveSession([roundEvent(i)], roundMeta(i))).toBe('memory');
+    expect(await loadEvents()).toEqual(Array.from({ length: 12 }, (_, i) => roundEvent(i)));
+    fixture.fail(null);
+    expect(await saveSession([roundEvent(12)], roundMeta(12))).toBe('persistent');
+    expect(await loadSessions()).toEqual(Array.from({ length: 13 }, (_, i) => roundMeta(i)));
+    expect(fixture.disk.get('events')!.size).toBe(13);
+    expect(fixture.disk.get('sessions')!.size).toBe(13);
+    fixture.denyReads(true);
+    expect((await loadEvents()).map(e => e.session)).toEqual([8, 9, 10, 11, 12].map(i => roundMeta(i).session));
+  });
+
+  it('keeps accurate commit receipts when a shared batch evicts older queued snapshots', async () => {
+    const fixture = recoveryFixture();
+    const { saveSession, loadEvents } = await import('./store');
+    const queued = Array.from({ length: 12 }, (_, i) => saveSession([roundEvent(i)], roundMeta(i)));
+    expect(await Promise.all(queued)).toEqual(Array(12).fill('persistent'));
+    expect(await loadEvents()).toEqual(Array.from({ length: 12 }, (_, i) => roundEvent(i)));
+    expect(fixture.disk.get('events')!.size).toBe(12);
+  });
+
+  it('protects a newer pending same-ID snapshot while another commit exceeds the cache window', async () => {
+    const fixture = recoveryFixture(); fixture.hold();
+    const { saveSession, loadEvents } = await import('./store');
+    const old = saveSession([roundEvent(0)], roundMeta(0)); await untilHeld(fixture.held);
+    const nextEvent = { ...roundEvent(0), key: 'b', expected: ['b'] };
+    const latest = saveSession([nextEvent], roundMeta(0));
+    const other = Array.from({ length: 8 }, (_, i) => saveSession([roundEvent(i + 1)], roundMeta(i + 1)));
+    fixture.held[0].commit(); expect(await old).toBe('persistent'); await untilHeld(fixture.held, 2);
+    fixture.denyReads(true);
+    expect((await loadEvents()).find(e => e.session === roundMeta(0).session)).toEqual(nextEvent);
+    fixture.held[1].commit(); expect(await latest).toBe('persistent');
+    expect(await Promise.all(other)).toEqual(Array(8).fill('persistent'));
+    fixture.denyReads(false);
+    expect((await loadEvents()).find(e => e.session === roundMeta(0).session)).toEqual(nextEvent);
+    expect(fixture.disk.get('events')!.size).toBe(9);
+  });
+
   it('keeps an independent, readable snapshot when IndexedDB is unavailable', async () => {
     vi.stubGlobal('indexedDB', undefined);
     const { saveSession, loadEvents, loadSessions } = await import('./store');
