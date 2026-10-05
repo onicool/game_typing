@@ -11,7 +11,7 @@ from playwright.sync_api import sync_playwright
 
 URL = sys.argv[1] if len(sys.argv)>1 else 'http://127.0.0.1:5184'
 BASE = sys.argv[2] if len(sys.argv)>2 else 'http://127.0.0.1:5188'
-OUT = Path('/tmp/game-typing-qa/skyway-cycle')
+OUT = Path('/tmp/game-typing-qa/skyway-sentinel-cycle')
 OUT.mkdir(parents=True, exist_ok=True)
 SIZES = [(1920,1080),(1366,768),(1024,768),(800,600),(768,1024)]
 INIT = """localStorage.setItem('icebreaker.sound','false');
@@ -44,7 +44,7 @@ with sync_playwright() as p:
 
     context=browser.new_context(viewport={'width':1920,'height':1080},record_video_dir=str(OUT/'video'),record_video_size={'width':1366,'height':768})
     context.add_init_script(INIT);page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-    page.goto(URL);page.evaluate(PROBE);page.wait_for_function('window.qaScene?.background?.naturalWidth>0')
+    page.goto(URL);page.evaluate(PROBE);page.wait_for_function('window.qaScene?.background?.naturalWidth>0 && qaScene?.target?.naturalWidth>0')
     start(page);page.wait_for_timeout(200);initial=page.evaluate(STATE)
     page.keyboard.type('chiri',delay=30);page.wait_for_timeout(50);hit=page.evaluate(STATE)
     assert hit['radius']>initial['radius'] and hit['thrust']>0, {'initial':initial,'hit':hit}
@@ -82,15 +82,16 @@ with sync_playwright() as p:
 
     # Reduced motion and low load preserve successful completion with no travel.
     context=browser.new_context(viewport={'width':800,'height':600},reduced_motion='reduce');context.add_init_script(INIT+"localStorage.setItem('icebreaker.graphics.low','true');")
-    page=context.new_page();page.goto(URL);page.evaluate(PROBE);page.wait_for_function('window.qaScene?.background?.naturalWidth>0');start(page)
+    page=context.new_page();page.goto(URL);page.evaluate(PROBE);page.wait_for_function('window.qaScene?.background?.naturalWidth>0 && qaScene?.target?.naturalWidth>0');start(page)
     before=page.evaluate(STATE);page.keyboard.type('chiri',delay=20);page.wait_for_timeout(120);after=page.evaluate(STATE)
     assert before['radius']==after['radius'] and before['travel']==after['travel'] and after['low'] and max(after['backing'])<=1920
     page.keyboard.type(page.locator('#romaji').inner_text()[5:],delay=20);page.wait_for_timeout(120);assert page.evaluate(STATE)['generation']==1
     page.screenshot(path=str(OUT/'reduced-low-800.png'));rows['captures'].append('reduced-low-800.png');rows['checks'].append({'motion_off':True,'low_load_backing_cap':True,'completion_feedback_retained':True});context.close()
 
-    for fail in ['artwork','canvas']:
+    for fail in ['artwork','target','canvas']:
         context=browser.new_context(viewport={'width':800,'height':600});context.add_init_script(INIT)
-        if fail=='artwork': context.route('**/stages/skyway.png',lambda route:route.abort())
+        if fail=='artwork': context.route('**/stages/*.png',lambda route:route.abort())
+        elif fail=='target': context.route('**/stages/aether-sentinel.png',lambda route:route.abort())
         else: context.add_init_script("const get=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(...args){return args[0]==='2d'?null:get.apply(this,args);};")
         page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.goto(URL);start(page);page.keyboard.type('chiri',delay=20)
         assert page.locator('#romaji .typed').inner_text()=='chiri'

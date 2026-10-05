@@ -53,6 +53,7 @@ export class Scene {
   private active = true;
   private arenaBottom = 650;
   private background: HTMLImageElement | null = null;
+  private target: HTMLImageElement | null = null;
   private thrust = 0;
   private approach = 0;
   private progressByGeneration = new Map<number, number>();
@@ -101,10 +102,18 @@ export class Scene {
 
   /** Optional artwork: unavailable/loading images retain the procedural sky. */
   setBackground(url: string) {
-    const image = new Image();
-    image.onload = () => { this.background = image; };
-    image.onerror = () => { /* Keep the usable local fallback. */ };
-    image.src = url;
+    this.loadImage(url, image => { this.background = image; });
+  }
+
+  setTarget(url: string) { this.loadImage(url, image => { this.target = image; }); }
+
+  private loadImage(url: string, ready: (image: HTMLImageElement) => void) {
+    try {
+      const image = new Image();
+      image.onload = () => { if (image.naturalWidth > 0 && image.naturalHeight > 0) ready(image); };
+      image.onerror = () => { /* Optional art keeps its procedural fallback. */ };
+      image.src = url;
+    } catch { /* Optional image construction must never prevent typing. */ }
   }
 
   setActive(active: boolean) { this.active = active; }
@@ -220,7 +229,7 @@ export class Scene {
     this.rings.push({ r: this.cubeRadius * 0.8, life: 0, max: 0.45, color: CYAN, grow: 320 });
     this.speed = 1600;
     this.approach = 0;
-    this.spawnT = 0;
+    this.spawnT = this.effects.motion === 0 ? 1 : 0;
     this.cracks.length = 0;
     this.burstShards(this.lowGraphics ? 3 : 18, 0.9);
     if (this.effects.motion > 0) for (let i = 0; i < (this.lowGraphics ? 4 : 12); i++) this.spark(CX + rand(-60, 60), CY + rand(-60, 60), rand(300, 900), CYAN, 0.4);
@@ -415,6 +424,14 @@ export class Scene {
     ctx.beginPath();
     this.hullPts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
     ctx.closePath(); ctx.fillStyle = `rgba(${10 + Math.round(this.damage * 25)},35,66,0.66)`; ctx.fill();
+    if (this.target && this.spawnT > 0.2) {
+      const size = R * 1.85;
+      const height = size * this.target.naturalHeight / this.target.naturalWidth;
+      ctx.save(); ctx.clip();
+      ctx.globalAlpha = Math.min(1, this.spawnT * 3);
+      ctx.drawImage(this.target, CX - size / 2, CY - height / 2, size, height);
+      ctx.restore();
+    }
     ctx.globalCompositeOperation = 'lighter';
     const col = this.missFlash > 0.2 && this.effects.flash > 0 ? RED : CYAN;
     for (let i = this.lowGraphics ? 2 : 0; i < 3; i++) {
@@ -435,7 +452,8 @@ export class Scene {
       if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
     }
     ctx.fillStyle = `rgba(${this.approach > 0.65 ? PINK : CYAN},${0.18 + this.kick * 0.2})`;
-    ctx.fill(); ctx.stroke();
+    if (!this.target) ctx.fill();
+    ctx.stroke();
     ctx.lineWidth = 1;
   }
 
@@ -481,7 +499,8 @@ export class Scene {
     this.cracks.push({ pts, born: this.time });
     // connect toward the center sometimes so cracks form a web
     if (Math.random() < 0.5) this.cracks.push({ pts: [[pts[0][0], pts[0][1]], [pts[0][0] * 0.4 + rand(-0.05, 0.05), pts[0][1] * 0.4 + rand(-0.05, 0.05)]], born: this.time });
-    if (this.cracks.length > (this.lowGraphics ? 48 : 160)) this.cracks.splice(0, 2);
+    // Long passages must not bury the enemy under a dense web of old cracks.
+    if (this.cracks.length > (this.lowGraphics ? 12 : 36)) this.cracks.splice(0, 2);
   }
 
   // ---- particles -----------------------------------------------------------
@@ -495,6 +514,7 @@ export class Scene {
       // preceding wall's completion; stale packets cannot crack a new wall.
       if (p.generation > this.generation) return true;
       if (p.generation < this.generation) return false;
+      this.kick = Math.max(this.kick, p.critical ? 0.45 : 0.2);
       this.addCrack(p.to);
       if (this.effects.motion > 0) {
         const n = this.lowGraphics ? 2 : p.critical ? 10 : 5;

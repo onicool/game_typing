@@ -29,6 +29,14 @@ function setup(recordDrawCalls = true) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('packet completion and independent graphics fallback', () => {
+  it('contains optional image construction failures without losing canvas or input feedback', () => {
+    const { scene, layer } = setup();
+    vi.stubGlobal('Image', class { constructor() { throw new Error('Synthetic image construction failure'); } });
+    expect(() => scene.setBackground('/art.png')).not.toThrow();
+    expect(() => scene.setTarget('/enemy.png')).not.toThrow();
+    scene.hit(false); scene.layerBreak(); scene.frame(1050); scene.frame(1100);
+    expect(layer).toHaveBeenCalledTimes(1);
+  });
   it('breaks every completed word once and isolates consecutive barrier packets', () => {
     const { scene, layer, crack } = setup();
     scene.hit(false); scene.layerBreak(); scene.layerBreak();
@@ -168,7 +176,7 @@ describe('packet completion and independent graphics fallback', () => {
     const state = scene as unknown as Record<'packets' | 'openings' | 'sparks' | 'shards' | 'rings' | 'texts' | 'cracks' | 'drifters', unknown[]> & { generation: number; coreGradients: Map<number, unknown> };
     for (const key of ['packets', 'openings', 'sparks', 'shards', 'rings', 'texts'] as const) expect(state[key]).toHaveLength(0);
     expect(state.generation).toBe(300);
-    expect(state.cracks.length).toBeLessThanOrEqual(160);
+    expect(state.cracks.length).toBeLessThanOrEqual(36);
     expect(state.coreGradients.size).toBeLessThanOrEqual(30);
     expect(state.drifters).toHaveLength(14);
   });

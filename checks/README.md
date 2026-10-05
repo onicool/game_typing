@@ -201,3 +201,21 @@ The raw video is an actual browser recording with no scene compositing. Review
 MP4 conversion uses installed ffmpeg. Physical keyboard/display/GPU latency,
 sustained devices, cold start, listening, spoken readers and other browsers
 remain unmeasured.
+
+
+The Aether Sentinel follow-up uses `/tmp/game-typing-qa/skyway-sentinel-cycle/`
+for fresh evidence. Its check adds missing-enemy fallback; the stage remains
+Canvas2D with one optional RGBA enemy image, and no debug hooks ship.
+`checks/skyway_review.py [production URL]` records six native words/miss/pause
+and a persisted 95-key long partial run at a fixed 1366×768 viewport. The silent
+raw WebM and H.264 review MP4 are saved under `production-review-final/`; no
+scene compositing is applied. Earlier review artifacts remain preserved.
+`checks/skyway_timing.py [production URL] [retained e026e8b URL]` runs two
+serial repeats of the same 30-word English stream after a five-word warm-up,
+with ordinary motion and muted audio, comparing before/candidate/low-load.
+It reuses existing instrumentation and asserts stream identity, not a latency
+budget. Software handler/next-rAF/app-callback times exclude capture work;
+shared-host load remains uncontrolled. A before-optimization sample is retained
+alongside final results. Scenery reservation now uses known CSS stage/panel
+geometry rather than forcing layout after every input DOM update. No product
+performance or paint/display-latency guarantee follows from these measurements.

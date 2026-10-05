@@ -34,6 +34,7 @@ const stage = $('stage');
 const dialogFocus = new DialogFocus(stage);
 const scene = new Scene($<HTMLCanvasElement>('scene'));
 scene.setBackground(`${import.meta.env.BASE_URL}stages/skyway.png`);
+scene.setTarget(`${import.meta.env.BASE_URL}stages/aether-sentinel.png`);
 const audio = new Audio();
 
 type Mode = 'title' | 'play' | 'result' | 'report';
@@ -61,19 +62,20 @@ for (const key of ['shake', 'flash', 'motion'] as const) {
 
 // ---- layout ---------------------------------------------------------------
 
+let inputBoost = 1;
 function fit() {
   const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
   stage.style.transform = `scale(${s})`;
   stage.style.setProperty('--text-boost', String(Math.max(1, Math.min(1.7, 0.75 / s))));
   // Keep the task text legible rather than shrinking it with the whole scene.
-  const inputBoost = Math.max(1, 0.875 / s);
+  inputBoost = Math.max(1, 0.875 / s);
   stage.style.setProperty('--input-boost', String(inputBoost));
   stage.style.setProperty('--input-width', `${Math.min(1800, Math.max(960, 720 / s))}px`);
   stage.classList.toggle('compact-input', inputBoost > 1.01);
   stage.classList.toggle('tight-input', s < 0.5);
   if (round?.word.segments) renderPanel();
   scene.resize(s);
-  scene.setArenaBottom($('input-panel').offsetTop - 65);
+  scene.setArenaBottom(1080 - 139 - (round?.word.segments ? 414 : 360) * inputBoost);
 }
 window.addEventListener('resize', fit);
 fit();
@@ -254,7 +256,9 @@ function renderPanel(miss = false) {
   }
   els.readyHelp.classList.toggle('hidden', round.started || long);
   scene.setProgress(s.kanaDone / total);
-  scene.setArenaBottom(els.word.closest<HTMLElement>('#input-panel')!.offsetTop - 65);
+  // The panel's stage-space bottom/height are fixed by CSS. Derive its reserved
+  // area without forcing a layout read after every accepted key's DOM writes.
+  scene.setArenaBottom(1080 - 139 - (long ? 414 : 360) * inputBoost);
 }
 
 function renderHud() {
@@ -272,7 +276,7 @@ function renderHud() {
   els.integrityVal.textContent = `${Math.round(integ * 100)}%`;
   els.integrityBar.style.width = `${integ * 100}%`;
   els.layerIndex.textContent = `◆ LAYER ${pad(round.layer + 1)} / ${pad(LAYERS_PER_FIREWALL)}`;
-  els.iceKind.textContent = `標準防壁 / 第 ${pad(round.layer + 1)} 層`;
+  els.iceKind.textContent = `迎撃機バリア / 第 ${pad(round.layer + 1)} 層`;
   els.iceId.textContent = `[ ICE // FW-${pad(round.firewalls + 1, 3)} ]`;
   els.sectorNo.textContent = '01';
   els.sectorSub.textContent = 'SKYWAY / 空中回廊';

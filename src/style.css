@@ -273,3 +273,6 @@ kbd { border: 1px solid #2c434e; padding: 3px 7px; margin-right: 6px; color: #9a
 
 .chain-pop { top: 190px; }
 .compact-input .chain-pop { display: none; }
+.compact-input .ice-index { display: none; }
+
+.enemy-info h2 { font-size: 18px; letter-spacing: 1px; }
