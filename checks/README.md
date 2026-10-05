@@ -260,3 +260,43 @@ production video live under `/tmp/game-typing-qa/asset-cycle/`. The amber attack
 is a visual-only progress response: it adds no collision timer/input/scoring
 judgement. New reaction contributes no screen flash/shake and motion-off remains
 stationary. Actual devices/network/other browsers/spoken readers are untested.
+
+## Finite repeated-play soak
+
+Preserve a production build in a fresh local directory before starting. Serve
+that immutable build on localhost; do not edit/rebuild it during measurement.
+Use a new output directory each time to retain earlier evidence:
+
+```sh
+python checks/soak_check.py http://127.0.0.1:5191 /tmp/game-typing-qa/soak-next 1200
+python checks/soak_history_check.py http://127.0.0.1:5191 /tmp/game-typing-qa/soak-next /tmp/game-typing-qa/report-next
+```
+
+The soak uses real elapsed time and native artificial typing, not accelerated
+timestamps or scripted rAF. It repeats real 60-second benchmarks, original
+passages, abandon/retry, pause/resume, a Chromium freeze/active transition and
+one deliberately deferred old save completion across a new partial result.
+The default run is 20 minutes (bounded to at most 30); `30` is only a short
+harness check and does not replace the long-duration evidence.
+
+Every ~30 seconds, CDP reports JS heap/DOM/listeners and WebAudio native
+creation/destruction. Images use only WeakRefs and counters, not strong object
+retention. No per-key tracing or video runs during measurement. Labelled GC
+samples explicitly pause and wait 2.2 seconds before collection; they are
+diagnostic, not normal user GC behavior. Reading/counting IndexedDB can itself
+allocate temporary objects. Saved history intentionally grows, and the app's
+existing memory fallback retains even successfully saved logs for this page.
+Separate this cache from short-lived render/audio allocations.
+
+Complete synthetic records are preserved under the output directory and compared
+after reload, including the first-key NaN interval. The second check seeds those
+same artificial records into another fresh context and opens/closes the report
+21 times, checking displayed sample count and post-GC heap/listener snapshots.
+It does not read a user profile or claim coverage of massive histories.
+
+In this headless Chromium, tab activation/minimization did not produce an actual
+hidden document. The real freeze check starts from an explicit pause, records
+the observed visibility states and makes no automatic-hidden/physical OS sleep
+claim. Existing artificial blur/hidden tests are separate. Browser instrumentation,
+software rendering, shared-host scheduling and induced GC affect all measurements.
+No physical-device latency, audible sound assessment or cross-browser guarantee.
