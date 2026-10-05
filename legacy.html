@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ICEBREAKER</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="viewport">
+    <div id="stage">
+      <canvas id="scene"></canvas>
+      <div id="edge-flash"></div>
+
+      <header class="topbar">
+        <div class="brand">
+          <svg class="brand-icon" viewBox="0 0 40 40" aria-hidden="true">
+            <polygon points="20,2 36,11 36,29 20,38 4,29 4,11" fill="none" stroke="#65f5ed" stroke-width="2" />
+            <path d="M22 9 L13 22 H20 L17 31 L27 17 H20 Z" fill="#65f5ed" />
+          </svg>
+          <div>
+            <div class="wordmark">ICEBREAKER</div>
+            <div class="brand-sub">TYPE TO BREACH.</div>
+          </div>
+        </div>
+        <div class="top-center">
+          <div class="sector">STAGE <em id="sector-no">01</em></div>
+          <div class="sector-sub" id="sector-sub">SKYWAY / 空中回廊</div>
+        </div>
+        <div class="accuracy">
+          <div class="accuracy-label"><span>[ ACCURACY ]</span><b id="accuracy-val">100<small>%</small></b></div>
+          <div class="accuracy-track" id="accuracy-track"></div>
+          <div class="accuracy-note jp" id="accuracy-note">ミス 0</div>
+        </div>
+      </header>
+      <div class="topline"></div>
+
+      <section class="chain">
+        <div class="label">[ CHAIN ]</div>
+        <div class="number" id="chain">0</div>
+        <div class="caption" id="chain-caption">CHAIN TIER 0</div>
+        <div class="chain-pop" id="chain-pop" role="status" aria-live="polite"></div>
+        <div class="overclock">
+          <div class="label small">OVERCLOCK</div>
+          <div class="stages" id="oc-stages"><i></i><i></i><i></i></div>
+          <div class="oc-name" id="oc-name">0 / IDLE</div>
+        </div>
+      </section>
+
+      <section class="depth">
+        <div class="ruler"></div>
+        <div>
+          <div class="eyebrow">DIVE DEPTH</div>
+          <div class="depth-value"><span id="depth">0</span> <small>m</small></div>
+          <div class="depth-tiny" id="depth-sub">▾ OUTER NETWORK</div>
+        </div>
+      </section>
+
+      <section class="enemy-info">
+        <div class="id" id="ice-id">[ ICE // FW-001 ]</div>
+        <h2>AETHER SENTINEL</h2>
+        <div class="kind jp" id="ice-kind">迎撃機バリア / 第 01 層</div>
+        <div class="integrity"><span>LAYER INTEGRITY</span><span id="integrity-val">100%</span></div>
+        <div class="integrity-line"><i id="integrity-bar"></i></div>
+        <div class="enemy-log" id="enemy-log"></div>
+      </section>
+
+      <div class="ice-index">
+        <span id="layer-index">◆ LAYER 01 / 05</span>
+        <span class="pill" id="ice-status">AWAITING INPUT</span>
+      </div>
+
+      <div class="ready-help jp hidden" id="ready-help">
+        表示されたローマ字を打つ。単語は自動で進む。ミスは打ち直し（Backspace不要）。語末の『ん』は nn。<br />
+        <span class="muted">shi / si どちらでも可　・　最初のキーでスタート</span>
+      </div>
+      <div class="layer-pips" id="layer-pips" role="img" aria-label="この防壁の突破済み層 0 / 5"><i></i><i></i><i></i><i></i><i></i></div>
+      <section class="input-panel" id="input-panel" tabindex="-1" aria-label="タイピング入力">
+        <div class="time-track" aria-hidden="true"><i id="time-bar"></i></div>
+        <div class="input-head">
+          <span class="input-label" id="input-label">INPUT // 001</span>
+          <span class="passage-help jp hidden" id="passage-help">時間制限なし · 句読点は , と . · Esc で中断・途中保存</span>
+          <div class="next" aria-label="次に打つ2件">
+            <div class="queue-item"><span class="queue-label">NEXT 1</span><span class="jp" id="next-word"></span><span id="next-guide"></span></div>
+            <div class="queue-item"><span class="queue-label">NEXT 2</span><span class="jp" id="following-word"></span><span id="following-guide"></span></div>
+          </div>
+        </div>
+        <div class="input-body">
+          <div class="word jp" id="word"></div>
+          <div class="reading jp" id="reading"></div>
+          <div class="romaji" id="romaji"></div>
+        </div>
+        <div class="input-meta">
+          <span id="mode-label">JP / ROMAJI　|　IME OFF</span>
+          <span class="progress">DECRYPTING // <span id="progress-text">00 / 00</span><span class="microtrack"><i id="progress-bar"></i></span></span>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span class="footer-controls"><button type="button" class="pause-trigger" id="pause-trigger"><kbd>ESC</kbd> PAUSE</button>
+          <span class="sound-controls">
+            <button type="button" id="sound-toggle" aria-label="音声をミュート" aria-pressed="false"><span id="sound-icon" aria-hidden="true">🔊</span> <span id="sound-state">[ 音声 ON ]</span></button>
+            <input type="range" id="sound-volume" min="0" max="1" step="0.05" value="1" aria-label="音量" aria-describedby="sound-control-help" />
+            <span class="sound-control-help jp" id="sound-control-help">操作中は Esc で入力へ戻る</span>
+          </span>
+        </span>
+        <span class="center"><span id="timer">RUN 00:60</span>　/　<span id="kps">0.0 字/秒</span></span>
+        <span class="signal">● LOCAL LINK</span>
+      </footer>
+
+      <!-- overlays -->
+      <section class="overlay" id="title-screen">
+        <div class="ov-box">
+          <div class="eyebrow">ICEBREAKER // PROTOTYPE P0</div>
+          <h1>打鍵で、電脳を割れ。</h1>
+          <p class="jp muted" id="title-intro">60 秒間、防壁を打ち破れ。単語を打ち切るたびに防壁の層が砕ける。</p>
+          <p class="jp start-help" id="title-help">表示されたローマ字を打つ。単語は自動で進む。ミスは打ち直し（Backspace不要）。語末の『ん』は nn。<br /><span class="muted">shi / si どちらでも可　・　最初のキーでスタート</span></p>
+          <div class="ov-options">
+            <span>辞書 <kbd>D</kbd> <b id="dict-name">日本語</b></span>
+            <span>音声 <kbd>M</kbd></span>
+            <span>脆弱性レポート <kbd>R</kbd></span>
+            <button type="button" id="open-settings">設定 <kbd>S</kbd></button>
+            <button type="button" id="start-passage">長文練習</button>
+          </div>
+          <div class="ov-start"><kbd>SPACE</kbd> DIVE</div>
+          <div class="ov-best muted" id="title-best"></div>
+        </div>
+      </section>
+
+      <section class="overlay hidden" id="result-screen">
+        <div class="ov-box result">
+          <div class="eyebrow" id="r-title">[ RUN COMPLETE ]</div>
+          <div class="jp result-mode" id="r-mode"></div>
+          <div class="jp session-save-state" id="session-save-state" role="status" aria-live="polite"></div>
+          <div class="result-grid">
+            <div><div class="eyebrow">速度</div><div class="big" id="r-speed">0</div><div class="muted small" id="r-kpm"></div></div>
+            <div><div class="eyebrow">正確率</div><div class="big" id="r-acc">0</div><div class="muted small" id="r-miss"></div></div>
+            <div><div class="eyebrow">MAX CHAIN</div><div class="big" id="r-chain">0</div><div class="muted small" id="r-layers"></div></div>
+          </div>
+          <div class="nearmiss jp" id="r-near"></div>
+          <div class="vuln jp" id="r-vuln"></div>
+          <div class="recent-sessions" id="recent-sessions" aria-label="この辞書の直近5セッション"></div>
+          <div class="ov-start"><kbd>SPACE</kbd> RE-DIVE　　<kbd>R</kbd> REPORT　　<kbd>ESC</kbd> TITLE</div>
+        </div>
+      </section>
+
+      <section class="overlay report hidden" id="report-screen"><div class="rp" id="report"></div></section>
+
+      <section class="overlay hidden" id="pause-screen" role="dialog" aria-modal="true" aria-labelledby="pause-title" aria-describedby="pause-note" tabindex="-1">
+        <div class="ov-box pause-box">
+          <div class="eyebrow">[ LINK SUSPENDED ]</div>
+          <h1 id="pause-title">一時停止</h1>
+          <p class="jp muted" id="pause-note">時計と入力を停止しています。</p>
+          <div class="pause-actions jp"><button type="button" id="pause-resume"><kbd>SPACE / ENTER</kbd> 再開</button><button type="button" id="pause-retry"><kbd>R</kbd> やり直し</button><button type="button" id="pause-title-return"><kbd>Q / ESC</kbd> タイトルへ</button><button type="button" id="pause-finish" class="hidden">終了して記録を保存</button></div>
+        </div>
+      </section>
+
+      <section class="overlay hidden" id="settings-screen" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-describedby="settings-help settings-save-state" tabindex="-1">
+        <div class="ov-box settings-box">
+          <div class="eyebrow">[ EFFECT SETTINGS ]</div>
+          <h1 id="settings-title">演出設定</h1>
+          <p class="jp muted" id="settings-help">Tab で移動、Space / Enter で変更。オフ / 弱 / 標準を切り替えます。</p>
+          <div class="settings-save-state jp hidden" id="settings-save-state" role="status" aria-live="polite"></div>
+          <div class="settings-options jp">
+            <button type="button" data-effect="shake"><span><kbd>1</kbd> 画面の揺れ</span><b id="setting-shake">標準</b></button>
+            <button type="button" data-effect="flash"><span><kbd>2</kbd> フラッシュ</span><b id="setting-flash">標準</b></button>
+            <button type="button" data-effect="motion"><span><kbd>3</kbd> 動き</span><b id="setting-motion">標準</b></button>
+            <button type="button" id="graphics-toggle"><span>描画の負荷</span><b id="setting-graphics">標準</b></button>
+          </div>
+          <div class="ov-options jp"><button type="button" id="close-settings"><kbd>S / ESC</kbd> タイトルへ</button></div>
+        </div>
+      </section>
+
+      <div class="settings-storage-state jp hidden" id="settings-storage-state" role="status" aria-live="polite"></div>
+      <div class="ime-warning hidden" id="ime-warning">IME をオフにしてください（英数入力）</div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

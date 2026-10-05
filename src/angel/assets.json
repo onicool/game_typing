@@ -1,0 +1,65 @@
+[
+  {
+    "source": "concept/stage-world-20261005/stage-01-heaven.png",
+    "webp": "public/angel/stage-01-heaven.webp",
+    "width": 1672,
+    "height": 941,
+    "bytes": 308860
+  },
+  {
+    "source": "concept/stage-world-20261005/stage-02-windmill-town.png",
+    "webp": "public/angel/stage-02-windmill-town.webp",
+    "width": 1672,
+    "height": 941,
+    "bytes": 404122
+  },
+  {
+    "source": "concept/stage-world-20261005/stage-03-harvest-road.png",
+    "webp": "public/angel/stage-03-harvest-road.webp",
+    "width": 1672,
+    "height": 941,
+    "bytes": 470104
+  },
+  {
+    "source": "concept/stage-world-20261005/stage-04-canal-industry.png",
+    "webp": "public/angel/stage-04-canal-industry.webp",
+    "width": 1672,
+    "height": 941,
+    "bytes": 378906
+  },
+  {
+    "source": "concept/stage-world-20261005/stage-05-lantern-quarter.png",
+    "webp": "public/angel/stage-05-lantern-quarter.webp",
+    "width": 1672,
+    "height": 941,
+    "bytes": 442732
+  },
+  {
+    "source": "concept/stage-world-20261005/stage-06-snow-fortress.png",
+    "webp": "public/angel/stage-06-snow-fortress.webp",
+    "width": 1672,
+    "height": 941,
+    "bytes": 394718
+  },
+  {
+    "source": "concept/stage-world-20261005/stage-07-salvation-city.png",
+    "webp": "public/angel/stage-07-salvation-city.webp",
+    "width": 1672,
+    "height": 941,
+    "bytes": 349692
+  },
+  {
+    "source": "concept/player-characters-20261005/player-elna.png",
+    "webp": "public/angel/player-elna.webp",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 245406
+  },
+  {
+    "source": "concept/player-characters-20261005/player-towa.png",
+    "webp": "public/angel/player-towa.webp",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 192292
+  }
+]

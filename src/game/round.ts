@@ -5,7 +5,9 @@ import { loadBaselines, type Baselines } from '../stats/baselines';
 
 export interface WordSource { next(): Pick }
 export interface RoundOptions {
-  mode?: 'benchmark' | 'patch' | 'passage';
+  mode?: 'benchmark' | 'patch' | 'passage' | 'journey';
+  /** Finite, untimed route. Only used by journey mode. */
+  wordLimit?: number;
   source?: WordSource;
   baselines?: Baselines;
   seed?: number;
@@ -68,7 +70,8 @@ const median = (xs: number[]) => {
 };
 
 export class Round {
-  readonly mode: 'benchmark' | 'patch' | 'passage';
+  readonly mode: 'benchmark' | 'patch' | 'passage' | 'journey';
+  readonly wordLimit: number;
   readonly seed: number;
   readonly log: KeyLog[] = [];
   startT: number | null = null;
@@ -121,6 +124,10 @@ export class Round {
 
   constructor(dict: Dictionary, private prefs: Record<string, string>, opts: RoundOptions = {}) {
     this.mode = opts.mode ?? 'benchmark';
+    this.wordLimit = this.mode === 'journey' ? (opts.wordLimit ?? 5) : Infinity;
+    if (this.mode === 'journey' && (!Number.isInteger(this.wordLimit) || this.wordLimit < 1)) {
+      throw new Error('Journey needs a positive finite word limit');
+    }
     const sourceSeed = opts.source && 'seed' in opts.source && typeof opts.source.seed === 'number' ? opts.source.seed : undefined;
     this.seed = (opts.seed ?? sourceSeed ?? Math.floor(Math.random() * 2 ** 32)) >>> 0;
     this.source = opts.source ?? new BenchmarkSource(dict, this.seed);
@@ -161,25 +168,25 @@ export class Round {
   }
 
   private checkDeadline(now: number): void {
-    if (this.mode === 'passage') return;
+    if (this.mode === 'passage' || this.mode === 'journey') return;
     if (!this.paused && this.started && !this.finished && this.elapsedMs(now) >= ROUND_MS) {
       this.endT = this.startT! + this.pausedMs + ROUND_MS;
     }
   }
 
   remainingMs(now: number) {
-    if (this.mode === 'passage') return Infinity;
+    if (this.mode === 'passage' || this.mode === 'journey') return Infinity;
     return Math.max(0, ROUND_MS - this.elapsedMs(now));
   }
 
   /** Explicit practice finish also preserves the frozen clock while paused. */
   finish(t: number): void {
-    if (this.mode === 'passage' && this.started && !this.finished) this.endT = this.pausedAt ?? t;
+    if ((this.mode === 'passage' || this.mode === 'journey') && this.started && !this.finished) this.endT = this.pausedAt ?? t;
   }
 
   accuracy(): number { return this.correct + this.misses ? this.correct / (this.correct + this.misses) : 1; }
 
-  totalKana() { return this.kanaDone + (this.mode === 'passage' && this.session.complete ? 0 : this.session.kanaDone); }
+  totalKana() { return this.kanaDone + ((this.mode === 'passage' || this.mode === 'journey') && this.session.complete ? 0 : this.session.kanaDone); }
 
   /** Integrity of the current firewall, 1 = intact. */
   integrity() {
@@ -282,7 +289,7 @@ export class Round {
         this.firewalls++;
         out.firewallDone = true;
       }
-      if (this.mode === 'passage') { this.endT = t; return out; }
+      if (this.mode === 'passage' || (this.mode === 'journey' && this.wordsDone >= this.wordLimit)) { this.endT = t; return out; }
       this.pick = this.nextPick;
       // Keep the promised word order. Learning a spelling can invalidate a
       // buffered target, but must not swap a word the player already previewed.
@@ -351,7 +358,7 @@ export class Round {
 
   result(): RoundResult {
     const duration = this.elapsedMs(performance.now());
-    const elapsed = (this.mode === 'passage' ? duration : Math.min(ROUND_MS, duration)) / 1000 || 1;
+    const elapsed = (this.mode === 'passage' || this.mode === 'journey' ? duration : Math.min(ROUND_MS, duration)) / 1000 || 1;
     const clean = this.log.filter((e) => e.correct && !e.wordStart && !e.afterMiss && !e.afterPause && isTiming(e.dt) && e.dt < 2000);
     const overall = median(clean.map((e) => e.dt));
     const groups = new Map<string, number[]>();
