@@ -76,10 +76,12 @@ with sync_playwright() as p:
     assert page.evaluate("document.activeElement.dataset.effect === 'shake'")
     assert page.evaluate("[...document.querySelector('#stage').children].every(e => e.id==='settings-screen' || e.inert)")
     assert not page.evaluate("document.querySelector('#sound-volume').focus(); document.activeElement.id==='sound-volume'")
-    for expected in ['flash', 'motion', None, 'shake']:
+    for expected in ['flash', 'motion', 'graphics', None, 'shake']:
         page.keyboard.press('Tab')
         if expected is None:
             assert active(page) == 'close-settings'
+        elif expected == 'graphics':
+            assert active(page) == 'graphics-toggle'
         else:
             assert page.evaluate('document.activeElement.dataset.effect') == expected
     page.keyboard.press('Shift+Tab')

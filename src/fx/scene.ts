@@ -20,7 +20,8 @@ const PINK = '255,88,200';
 const RED = '255,80,100';
 const WHITE = '235,255,250';
 
-interface Packet { from: P2; to: P2; t: number; dur: number; critical: boolean; generation: number }
+interface Packet { from: P2; to: P2; t: number; dur: number; critical: boolean; generation: number; completion?: 'layer' | 'breach' }
+interface Opening { pts: P2[]; life: number; max: number }
 interface Spark { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; len: number }
 interface Shard { pts: P2[]; x: number; y: number; vx: number; vy: number; rot: number; vr: number; life: number; max: number; color: string }
 interface Crack { pts: P2[]; born: number } // relative to cube center, in units of cube radius
@@ -75,7 +76,10 @@ function hull(points: P2[], sorted: P2[], out: P2[]) {
 }
 
 export class Scene {
-  private ctx: CanvasRenderingContext2D;
+  private ctx!: CanvasRenderingContext2D;
+  private available = false;
+  private viewScale = 1;
+  private lowGraphics = false;
   private last = 0;
   private time = 0; // world time, frozen during hit-stop
   private motionTime = 0; // separate rotation clock; cracks age even with motion disabled
@@ -87,6 +91,8 @@ export class Scene {
   private speed = 0;
   private stage = 0;
   private generation = 0;
+  private inputGeneration = 0;
+  private openings: Opening[] = [];
   private effects = { shake: 1, flash: 1, motion: 1 };
   private damage = 0; // 0 = intact, 1 = about to break
   private kick = 0;
@@ -113,17 +119,45 @@ export class Scene {
   private coreGradients = new Map<number, CanvasGradient>();
 
   constructor(private canvas: HTMLCanvasElement) {
-    this.ctx = canvas.getContext('2d', { alpha: false })!;
+    this.restoreContext();
+    canvas.addEventListener('contextlost', () => {
+      this.setAvailable(false);
+      this.reset();
+    });
+    canvas.addEventListener('contextrestored', () => this.restoreContext());
     for (let i = 0; i < 14; i++) this.drifters.push(this.newDrifter(rand(600, 4200)));
   }
 
+  private setAvailable(available: boolean) {
+    this.available = available;
+    this.canvas.parentElement?.classList.toggle('scene-unavailable', !available);
+  }
+
+  private restoreContext() {
+    try {
+      const ctx = this.canvas.getContext('2d', { alpha: false });
+      if (!ctx) return this.setAvailable(false);
+      this.ctx = ctx;
+      this.setAvailable(true);
+      this.resize(this.viewScale);
+    } catch { this.setAvailable(false); }
+  }
+
   resize(scale: number) {
+    this.viewScale = scale;
+    if (!this.available) return;
     // Cap the backing store at 4K while retaining stage-space coordinates.
-    const pixelScale = Math.min(scale * (window.devicePixelRatio || 1), 2);
+    const pixelScale = Math.min(scale * (window.devicePixelRatio || 1), this.lowGraphics ? 1 : 2);
     this.canvas.width = Math.max(1, Math.round(W * pixelScale));
     this.canvas.height = Math.max(1, Math.round(H * pixelScale));
     this.ctx.setTransform(this.canvas.width / W, 0, 0, this.canvas.height / H, 0, 0);
     this.coreGradients.clear();
+  }
+
+  setLowGraphics(low: boolean) {
+    if (this.lowGraphics === low) return;
+    this.lowGraphics = low;
+    this.resize(this.viewScale);
   }
 
   setStage(stage: number) { this.stage = stage; }
@@ -137,8 +171,10 @@ export class Scene {
 
   reset() {
     this.packets.length = this.sparks.length = this.shards.length = this.cracks.length = this.texts.length = this.rings.length = 0;
+    this.openings.length = 0;
     this.speed = this.shake = this.flash = this.missFlash = this.kick = this.hitStop = 0;
     this.damage = this.stage = this.generation = 0;
+    this.inputGeneration = 0;
     this.last = this.time = this.motionTime = this.tunnelZ = 0;
     this.spawnT = 1;
     this.cubeRadius = 230;
@@ -147,15 +183,17 @@ export class Scene {
 
   /** Accepted keystroke: fire a packet at the firewall. */
   hit(critical: boolean, gainMs = 0) {
-    const n = critical ? 3 : 1;
+    if (!this.available) return;
+    const n = critical && !this.lowGraphics && this.effects.motion > 0 ? 3 : 1;
     for (let i = 0; i < n; i++) {
       const from: P2 = [960 + rand(-160, 160), 750];
       const a = rand(0, Math.PI * 2);
       const r = Math.sqrt(Math.random()) * this.cubeRadius * 0.6;
       const to: P2 = [CX + Math.cos(a) * r, CY + Math.sin(a) * r];
-      this.packets.push({ from, to, t: 0, dur: critical ? 0.07 : 0.085, critical, generation: this.generation });
+      this.packets.push({ from, to, t: 0, dur: critical ? 0.07 : 0.085, critical, generation: this.inputGeneration });
       // Visible on the first frame, before the packet reaches the firewall.
       const color = critical ? PINK : CYAN;
+      if (this.effects.motion === 0 || this.lowGraphics) continue;
       this.rings.push({ r: 2, life: 0, max: 0.1, color, grow: 7, at: from });
       const angle = rand(-Math.PI, 0);
       const speed = rand(35, 80);
@@ -175,31 +213,56 @@ export class Scene {
 
   /** A word was completed: one firewall layer breaks. */
   layerBreak() {
+    const last = this.packets.at(-1);
+    if (last) last.completion = 'layer';
+  }
+
+  /** Attach the completion to its final packet, without delaying input/scoring. */
+  breach() {
+    const last = this.packets.at(-1);
+    if (last) { last.completion = 'breach'; this.inputGeneration++; }
+  }
+
+  private showLayerBreak() {
     this.hitStop = 0.05;
     this.kick = 1;
     this.shake = Math.max(this.shake, 9);
     this.rings.push({ r: this.cubeRadius * 0.8, life: 0, max: 0.45, color: CYAN, grow: 320 });
-    this.burstShards(10, 0.6);
-    for (let i = 0; i < 16; i++) this.spark(CX + rand(-60, 60), CY + rand(-60, 60), rand(300, 900), CYAN, 0.4);
+    this.burstShards(this.lowGraphics ? 3 : 8, 0.6);
+    if (this.effects.motion > 0) for (let i = 0; i < (this.lowGraphics ? 4 : 12); i++) this.spark(CX + rand(-60, 60), CY + rand(-60, 60), rand(300, 900), CYAN, 0.4);
   }
 
   /** The whole firewall is destroyed: shatter, flash, rush forward. */
-  breach() {
+  private showBreach() {
+    // The outgoing wall opens only once the completing packet has arrived.
+    // Snapshot its outline so it cannot become attached to the next wall.
+    this.openings.push({ pts: this.hullPts.map(([x, y]) => [x, y]), life: 0, max: 0.42 });
+    if (this.openings.length > 4) this.openings.shift();
     this.generation++;
     this.hitStop = 0.06;
     this.flash = 1;
     this.shake = 18;
     this.speed = 2600;
-    this.burstShards(34, 1.2);
+    this.burstShards(this.lowGraphics ? 5 : 18, 1.2);
     this.rings.push({ r: this.cubeRadius, life: 0, max: 0.7, color: PINK, grow: 520 });
     this.rings.push({ r: this.cubeRadius * 0.6, life: 0, max: 0.55, color: CYAN, grow: 420 });
-    for (let i = 0; i < 22; i++) this.spark(CX + rand(-40, 40), CY + rand(-40, 40), rand(700, 1600), Math.random() < 0.5 ? CYAN : PINK, 0.6);
+    if (this.effects.motion > 0) for (let i = 0; i < (this.lowGraphics ? 4 : 14); i++) this.spark(CX + rand(-40, 40), CY + rand(-40, 40), rand(700, 1600), Math.random() < 0.5 ? CYAN : PINK, 0.6);
     this.cracks.length = 0;
     this.damage = 0;
     this.spawnT = this.effects.motion === 0 ? 1 : 0;
   }
 
   frame(now: number) {
+    if (!this.available) return;
+    try { this.drawFrame(now); }
+    catch {
+      // A graphics failure must not stop the application's clock/input loop.
+      this.setAvailable(false);
+      this.reset();
+    }
+  }
+
+  private drawFrame(now: number) {
     const dt = this.last ? Math.min(0.05, (now - this.last) / 1000) : 0.016;
     this.last = now;
     const worldDt = this.hitStop > 0 ? dt * (1 - this.effects.motion) : dt;
@@ -228,13 +291,16 @@ export class Scene {
     ctx.save();
     ctx.translate(sx, sy);
 
+    // Resolve packet arrival before drawing the new wall and its opening.
+    this.updatePackets(dt);
     this.drawTunnel(worldDt, tunnelSpeed);
     this.drawCube();
     this.drawCracks();
+    this.updateOpenings(dt);
     ctx.restore();
 
     // effects that should not shake as much
-    this.updatePackets(dt);
+    this.drawPackets();
     this.updateSparks(dt);
     this.updateShards(dt);
     this.updateRings(dt);
@@ -263,7 +329,7 @@ export class Scene {
     const rings = this.tunnelPts;
     const zs = this.tunnelDepths;
     let count = 0;
-    for (let i = 0; i < 11; i++) {
+    for (let i = 0; i < (this.lowGraphics ? 7 : 11); i++) {
       const z = 260 + i * 420 - this.tunnelZ;
       if (z < 120) continue;
       zs[count] = z;
@@ -297,7 +363,7 @@ export class Scene {
     }
     // floor grid lines converging
     ctx.strokeStyle = `rgba(${CYAN},0.06)`;
-    for (let i = -8; i <= 8; i++) {
+    for (let i = -8; i <= 8 && !this.lowGraphics; i++) {
       const a = this.project(i * 260, 900, 140, this.projectA);
       const b = this.project(i * 260, 900, 5000, this.projectB);
       ctx.beginPath();
@@ -306,6 +372,7 @@ export class Scene {
       ctx.stroke();
     }
     // drifting wire cubes
+    if (this.lowGraphics) return;
     for (const d of this.drifters) {
       d.z -= speed * dt * 0.9;
       d.rx += dt * 0.2 * this.effects.motion;
@@ -400,7 +467,7 @@ export class Scene {
     const col = flicker === 1 ? RED : flicker === 0 ? CYAN
       : `${Math.round(101 + 154 * flicker)},${Math.round(245 - 165 * flicker)},${Math.round(237 - 137 * flicker)}`;
     const glow = 0.18 + this.stage * 0.06 + this.kick * 0.3;
-    for (let i = 0; i < EDGE_WIDTHS.length; i++) {
+    for (let i = this.lowGraphics ? EDGE_WIDTHS.length - 1 : 0; i < EDGE_WIDTHS.length; i++) {
       const a = i === 0 ? glow * 0.5 : i === 1 ? glow : 0.95;
       ctx.lineWidth = EDGE_WIDTHS[i];
       ctx.strokeStyle = `rgba(${col},${a * approach})`;
@@ -480,16 +547,35 @@ export class Scene {
     this.cracks.push({ pts, born: this.time });
     // connect toward the center sometimes so cracks form a web
     if (Math.random() < 0.5) this.cracks.push({ pts: [[pts[0][0], pts[0][1]], [pts[0][0] * 0.4 + rand(-0.05, 0.05), pts[0][1] * 0.4 + rand(-0.05, 0.05)]], born: this.time });
-    if (this.cracks.length > 160) this.cracks.splice(0, 2);
+    if (this.cracks.length > (this.lowGraphics ? 48 : 160)) this.cracks.splice(0, 2);
   }
 
   // ---- particles -----------------------------------------------------------
 
   private updatePackets(dt: number) {
-    const ctx = this.ctx;
-    ctx.globalCompositeOperation = 'lighter';
     retain(this.packets, (p) => {
       p.t += dt;
+      if (p.t < p.dur && this.effects.motion > 0) return true;
+      // A quicker critical packet for the next wall must wait for the
+      // preceding wall's completion; stale packets cannot crack a new wall.
+      if (p.generation > this.generation) return true;
+      if (p.generation < this.generation) return false;
+      this.addCrack(p.to);
+      if (this.effects.motion > 0) {
+        const n = this.lowGraphics ? 2 : p.critical ? 10 : 5;
+        for (let i = 0; i < n; i++) this.spark(p.to[0], p.to[1], rand(150, p.critical ? 700 : 420), p.critical ? PINK : CYAN, 0.3);
+      }
+      this.rings.push({ r: 4, life: 0, max: 0.22, color: p.critical ? PINK : CYAN, grow: p.critical ? 70 : 40, at: p.to });
+      if (p.completion === 'breach') this.showBreach();
+      else if (p.completion === 'layer') this.showLayerBreak();
+      return false;
+    });
+  }
+
+  private drawPackets() {
+    const ctx = this.ctx;
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of this.packets) {
       const k = Math.min(1, p.t / p.dur);
       const e = k * k;
       const motion = this.effects.motion;
@@ -509,13 +595,41 @@ export class Scene {
         ctx.lineTo(x, y);
         ctx.stroke();
       }
-      if (k >= 1) {
-        if (!current) return false;
-        this.addCrack(p.to);
-        const n = p.critical ? 14 : 7;
-        for (let i = 0; i < n; i++) this.spark(p.to[0], p.to[1], rand(150, p.critical ? 700 : 420), p.critical ? PINK : CYAN, 0.3);
-        this.rings.push({ r: 4, life: 0, max: 0.22, color: p.critical ? PINK : CYAN, grow: p.critical ? 70 : 40, at: p.to });
-        return false;
+      if (p.completion) {
+        ctx.strokeStyle = `rgba(${WHITE},${fade})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, y - 7); ctx.lineTo(x + 7, y);
+        ctx.lineTo(x, y + 7); ctx.lineTo(x - 7, y);
+        ctx.closePath(); ctx.stroke();
+      }
+    }
+    ctx.lineWidth = 1;
+  }
+
+  private updateOpenings(dt: number) {
+    const ctx = this.ctx;
+    retain(this.openings, opening => {
+      opening.life += dt;
+      const k = opening.life / opening.max;
+      if (k >= 1) return false;
+      const spread = (1 - Math.pow(1 - k, 3)) * 160 * this.effects.motion;
+      for (const side of [-1, 1]) {
+        ctx.save();
+        ctx.translate(side * spread, 0);
+        ctx.beginPath();
+        ctx.rect(side < 0 ? 0 : CX, 0, side < 0 ? CX : W - CX, H);
+        ctx.clip();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.beginPath();
+        opening.pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+        ctx.closePath();
+        ctx.fillStyle = `rgba(${CYAN},${(1 - k) * 0.07})`;
+        ctx.fill();
+        ctx.strokeStyle = `rgba(${CYAN},${(1 - k) * 0.8})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.restore();
       }
       return true;
     });
@@ -551,6 +665,7 @@ export class Scene {
   }
 
   private burstShards(n: number, power: number) {
+    if (this.effects.motion === 0) return;
     for (let i = 0; i < n; i++) {
       const a = rand(0, Math.PI * 2);
       const r = Math.sqrt(Math.random()) * this.cubeRadius * 0.8;

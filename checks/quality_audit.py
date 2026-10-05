@@ -80,7 +80,7 @@ with sync_playwright() as p:
     assert warning and len(dialogs) == 1 and warning in dialogs[0].get('description', {}).get('value', '')
     assert dialogs[0]['name']['value'] == '演出設定'
     buttons = [n['name']['value'] for n in exposed if n.get('role', {}).get('value') == 'button']
-    assert len(buttons) == 4 and all(buttons)
+    assert len(buttons) == 5 and all(buttons)
     updates = Counter((event['id'], event['text']) for event in page.evaluate('qaLive') if event['text'])
     assert updates[('settings-storage-state', warning)] == 1
     assert updates[('settings-save-state', warning)] == 1
@@ -138,7 +138,7 @@ with sync_playwright() as p:
               const e=document.getElementById(id),r=document.createRange();r.selectNodeContents(e);const t=r.getBoundingClientRect();
               return {id,empty:!e.textContent,overflow:e.scrollWidth>e.clientWidth+1,
                 inside_panel:!e.textContent||(t.left>=p.left&&t.right<=p.right&&t.top>=p.top&&t.bottom<=p.bottom),
-                rendered_font_px:parseFloat(getComputedStyle(e).fontSize)*p.width/960};});}''')
+                rendered_font_px:parseFloat(getComputedStyle(e).fontSize)*new DOMMatrix(getComputedStyle(document.querySelector('#stage')).transform).a};});}''')
             assert all(not item['overflow'] and item['inside_panel'] for item in geometry), geometry
             results['layout'].append({'dict': target['dict'], 'viewport': [width, height], 'word': target['display'],
                                       'guide': target['guide'], 'seed': target['seed'], 'text_geometry': geometry})

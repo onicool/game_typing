@@ -308,6 +308,8 @@ type KeystrokeEvent = {
 
 公式一次資料の確認（2026-10-05）：現行 Three.js の `WebGLRenderer` は WebGL2 を要求し、[WebGL addon](https://threejs.org/docs/pages/WebGL.html) で利用可否を確認できる。[WebGLRenderer](https://threejs.org/docs/pages/WebGLRenderer.html) の描画統計と資源解放も比較時の候補。同じ canvas で異なる描画コンテキストへ切り替えられないため、[getContext](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) と [webglcontextlost](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/webglcontextlost_event) の仕様に沿って初期化失敗・喪失時の経路を検証する。
 
+再開後の小サイクル（ローカル比較案）：今回は Canvas2D で小窓の文字拡大、最終パケット着弾後の防壁開放、低負荷設定を実装した。Three.js の比較試作は未実施。現行描画は WebGL を必要とせず、Canvas2D 自体の取得失敗・描画例外・[contextlost](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/contextlost_event) 時も DOM の入力・時計・保存を継続し、[contextrestored](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/contextrestored_event) で再初期化する。動きを減らす既定値と明示の演出設定を保つ。大きく見た目が変わる節目には同じ条件の実画面 A/B をユーザーに提示して好みを確認する（統計的な効果検証とは別）。今回の比較画像と測定限界は TODO.md / checks/README.md に記録する。
+
 ---
 
 ## 8. 技術構成

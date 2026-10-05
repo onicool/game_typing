@@ -11,6 +11,8 @@
   --mono: Menlo, Consolas, "Hiragino Kaku Gothic ProN", "Hiragino Sans", monospace;
   --jp: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", sans-serif;
   --text-boost: 1;
+  --input-boost: 1;
+  --input-width: 960px;
 }
 
 * { box-sizing: border-box; }
@@ -88,12 +90,12 @@ kbd { border: 1px solid #2c434e; padding: 3px 7px; margin-right: 6px; color: #9a
 
 /* input panel: protected from all effects */
 .ready-help { position: absolute; bottom: 344px; left: 240px; width: 1440px; z-index: 11; text-align: center; font-size: calc(14px * var(--text-boost)); line-height: 1.3; letter-spacing: 0; overflow-wrap: anywhere; }
-.layer-pips { position: absolute; top: 739px; left: 50%; transform: translateX(-50%); display: flex; gap: 9px; z-index: 11; }
+.layer-pips { position: absolute; bottom: calc(86px + 252px * var(--input-boost)); left: 50%; transform: translateX(-50%); display: flex; gap: 9px; z-index: 11; }
 .layer-pips i { display: block; width: 18px; height: 5px; border: 1px solid #41646e; background: #10232b; }
 .layer-pips i.broken { background: var(--green); border-color: var(--green); }
 .time-track { position: absolute; left: 0; right: 0; top: -5px; height: 3px; background: #18323b; pointer-events: none; }
 .time-track i { display: block; height: 100%; width: 100%; background: var(--cyan); }
-.input-panel { position: absolute; left: 480px; top: 754px; width: 960px; height: 252px; background: var(--panel); border: 1px solid #375963; z-index: 10; padding: 25px 36px; box-shadow: 0 12px 60px #000b; }
+.input-panel { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); width: var(--input-width); height: calc(252px * var(--input-boost)); background: var(--panel); border: 1px solid #375963; z-index: 10; padding: calc(25px * var(--input-boost)) calc(36px * var(--input-boost)); box-shadow: 0 12px 60px #000b; }
 .input-panel::before, .input-panel::after { content: ""; position: absolute; width: 32px; height: 15px; border-color: var(--cyan); border-style: solid; pointer-events: none; }
 .input-panel::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
 .input-panel::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
@@ -101,19 +103,36 @@ kbd { border: 1px solid #2c434e; padding: 3px 7px; margin-right: 6px; color: #9a
 .input-label { color: var(--cyan); }
 .next { font-size: 11px; letter-spacing: 0.4px; color: #74818b; }
 .next .jp { font-size: 13px; margin: 0 9px; color: #8f9ba4; }
-.input-body { text-align: center; margin-top: 17px; }
-.word { font-size: 43px; font-weight: 600; line-height: 1.35; letter-spacing: 6px; color: #edf4f5; min-height: 58px; white-space: nowrap; }
-.reading { font-size: 16px; letter-spacing: 3px; color: #aab8c1; margin-top: 6px; min-height: 22px; }
+.input-body { text-align: center; margin-top: calc(17px * var(--input-boost)); }
+.word { font-size: calc(43px * var(--input-boost)); font-weight: 600; line-height: 1.35; letter-spacing: calc(6px * var(--input-boost)); color: #edf4f5; min-height: calc(58px * var(--input-boost)); white-space: nowrap; }
+.reading { font-size: calc(16px * var(--input-boost)); letter-spacing: calc(3px * var(--input-boost)); color: #c6d3da; margin-top: calc(6px * var(--input-boost)); min-height: calc(22px * var(--input-boost)); }
 .reading .done { color: var(--green); }
-.romaji { font-size: 34px; letter-spacing: 3px; line-height: 1.3; margin-top: 12px; white-space: nowrap; color: #e2e9ed; min-height: 44px; }
+.romaji { font-size: calc(34px * var(--input-boost)); letter-spacing: calc(3px * var(--input-boost)); line-height: 1.3; margin-top: calc(12px * var(--input-boost)); white-space: nowrap; color: #e2e9ed; min-height: calc(44px * var(--input-boost)); }
 .romaji .typed { color: var(--green); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 8px; }
-.romaji .cursor { display: inline-block; border-left: 2px solid #b3c8cf; height: 32px; vertical-align: -5px; margin-right: -2px; }
+.romaji .cursor { display: inline-block; border-left: 2px solid #b3c8cf; height: calc(32px * var(--input-boost)); vertical-align: calc(-5px * var(--input-boost)); margin-right: -2px; }
 .romaji .err { color: var(--red); text-decoration: underline wavy; text-underline-offset: 8px; }
 .input-meta { position: absolute; bottom: 21px; left: 36px; right: 36px; display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: space-between; font-size: calc(14px * var(--text-boost)); letter-spacing: 1.5px; color: #78919c; overflow-wrap: anywhere; }
 .input-meta > span { min-width: 0; }
 .input-meta .progress { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-left: auto; }
 .microtrack { width: 76px; height: 2px; background: #29434b; }
 .microtrack i { width: 0; display: block; height: 2px; background: var(--green); }
+
+.compact-input .ready-help { bottom: calc(126px + 252px * var(--input-boost)); }
+.compact-input .ice-index { top: auto; bottom: calc(170px + 252px * var(--input-boost)); }
+.compact-input .input-head { font-size: calc(13px * var(--input-boost)); letter-spacing: 0.5px; }
+.compact-input .next { font-size: inherit; }
+.compact-input .next .jp { font-size: inherit; }
+.compact-input .input-meta { left: calc(36px * var(--input-boost)); right: calc(36px * var(--input-boost)); font-size: calc(14px * var(--input-boost)); letter-spacing: 0; }
+.compact-input .depth { display: none; }
+.compact-input .enemy-info { top: 190px; }
+.compact-input .enemy-log { display: none; }
+.compact-input #scene { transform: translateY(-180px) scale(0.75); transform-origin: 975px 435px; }
+.tight-input .overclock { margin-top: 12px; }
+.tight-input .chain .number { font-size: 70px; margin-top: 4px; }
+.tight-input .stages { margin-top: 6px; margin-bottom: 6px; }
+.tight-input .oc-name, .tight-input .ice-index { display: none; }
+.tight-input #scene { transform: translateY(-210px) scale(0.6); }
+.scene-unavailable #scene { visibility: hidden; }
 
 .footer { position: absolute; z-index: 40; bottom: 29px; left: 56px; right: 56px; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; align-items: center; font-size: calc(14px * var(--text-boost)); letter-spacing: 1px; color: #78919c; }
 .footer .center { color: #8aa3ad; }

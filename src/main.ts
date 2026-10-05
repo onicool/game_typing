@@ -53,6 +53,7 @@ type EffectLevel = 0 | 0.5 | 1;
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const effectDefaults: Record<Effect, EffectLevel> = { shake: reducedMotion ? 0 : 1, flash: 1, motion: reducedMotion ? 0 : 1 };
 const effects = {} as Record<Effect, EffectLevel>;
+let lowGraphics = store.get('graphics.low', false, isBoolean);
 for (const key of ['shake', 'flash', 'motion'] as const) {
   effects[key] = store.get(`effects.${key}`, effectDefaults[key], isEffectLevel);
 }
@@ -63,6 +64,12 @@ function fit() {
   const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
   stage.style.transform = `scale(${s})`;
   stage.style.setProperty('--text-boost', String(Math.max(1, Math.min(1.7, 0.75 / s))));
+  // Keep the task text legible rather than shrinking it with the whole scene.
+  const inputBoost = Math.max(1, 0.875 / s);
+  stage.style.setProperty('--input-boost', String(inputBoost));
+  stage.style.setProperty('--input-width', `${Math.min(1800, Math.max(960, 720 / s))}px`);
+  stage.classList.toggle('compact-input', inputBoost > 1.01);
+  stage.classList.toggle('tight-input', s < 0.5);
   scene.resize(s);
 }
 window.addEventListener('resize', fit);
@@ -130,6 +137,8 @@ els.volume.addEventListener('pointerup', () => els.volume.blur());
 
 function applyEffects() {
   scene.setEffects(effects);
+  scene.setLowGraphics(lowGraphics);
+  $('setting-graphics').textContent = lowGraphics ? '低負荷' : '標準';
   stage.style.setProperty('--edge-opacity', String(0.55 * effects.flash));
   stage.classList.toggle('flash-off', effects.flash === 0);
   stage.classList.toggle('motion-off', effects.motion === 0);
@@ -151,6 +160,11 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-effect]
     cycleEffect(button.dataset.effect as Effect);
   });
 }
+$('graphics-toggle').addEventListener('click', () => {
+  lowGraphics = !lowGraphics;
+  store.set('graphics.low', lowGraphics);
+  applyEffects();
+});
 
 function announce(messages: string[]) {
   if (!messages.length) return;

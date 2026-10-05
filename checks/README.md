@@ -65,3 +65,33 @@ callback (scene and clock), and deliberately injected CPU load. It runs serially
 with two repeats and writes diagnostic JSON, without enforcing a latency budget.
 Shared-host load, browser automation, and rendering affect results. It does not
 measure paint or device latency and cannot by itself establish a product defect.
+
+The resumed graphics cycle adds a bounded visual comparison:
+
+```sh
+# Before rebuilding, preserve the prior build under a new /tmp directory.
+cp -a dist /tmp/game-typing-baseline-dist
+python -m http.server 5180 --bind 127.0.0.1 --directory /tmp/game-typing-baseline-dist
+# In separate terminals, build and preview the candidate on 5179, then:
+python checks/graphics_check.py http://127.0.0.1:5179 http://127.0.0.1:5180
+```
+
+Use a fresh destination or the retained earlier baseline; do not copy the
+candidate over the baseline. The completed baseline for this cycle is preserved
+at `/tmp/game-typing-qa/graphics-cycle/before-dist` (runtime `7c831e54`).
+The check records five-size A/B text geometry, real browser screenshots with
+the same seed and typed prefix, and four frame steps around the fifth word's
+firewall completion. Scripted rAF is used only for reproducible capture; the
+normal serial timing samples use actual browser callbacks. No screenshots are
+composited or edited, and A/B is a preference comparison rather than a statistical
+experiment.
+
+Eight renderer conditions verify exact persisted keys/accepted flags/expected
+keys/word identity: normal, low load, reduced motion, unavailable WebGL, null or
+throwing Canvas2D acquisition, simulated context loss/restore and injected draw
+failure. Low-load keyboard activation, high-DPI backing-store dimensions, reload,
+and preservation of damaged original settings are checked. Outputs are in
+`/tmp/game-typing-qa/graphics-cycle/graphics-results.json` and adjacent PNGs.
+The renderer remains Canvas2D; WebGL/Three.js was not implemented. No real
+driver/context-loss event, physical input/display or paint latency, cold-start
+budget, spoken accessibility, or Safari/Firefox measurement was performed.
