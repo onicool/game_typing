@@ -1,0 +1,17 @@
+{
+  "generator": "built-in image_gen",
+  "assets": [
+    {
+      "file": "player-elna.png",
+      "width": 1024,
+      "height": 1536,
+      "bytes": 2419616
+    },
+    {
+      "file": "player-towa.png",
+      "width": 1024,
+      "height": 1536,
+      "bytes": 2191504
+    }
+  ]
+}
