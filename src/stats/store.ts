@@ -11,12 +11,27 @@ type SessionMeta = {
 interface EventRecord { session: string; dict: string; endedAt: number; events: StoredKey[] }
 /** A persistent result is returned only after both stores commit. */
 export type SessionSaveStatus = 'persistent' | 'memory';
-const memory = new Map<string, { meta: SessionMeta; record: EventRecord }>();
+interface SavedSession { meta: SessionMeta; record: EventRecord }
+const memory = new Map<string, SavedSession>();
+const pending = new Map<string, SavedSession>();
 let database: Promise<IDBDatabase | null> | undefined;
+let connection: IDBDatabase | null = null;
+let writes = Promise.resolve();
+
+function forgetConnection(db: IDBDatabase): void {
+  if (connection === db) {
+    connection = null;
+    database = undefined;
+  }
+}
+
+function recoverClosedConnection(db: IDBDatabase | null, error: unknown): void {
+  if (db && error instanceof DOMException && error.name === 'InvalidStateError') forgetConnection(db);
+}
 
 function openDatabase(): Promise<IDBDatabase | null> {
   if (database) return database;
-  database = new Promise(resolve => {
+  const attempt = new Promise<IDBDatabase | null>(resolve => {
     try {
       if (!globalThis.indexedDB) { resolve(null); return; }
       const request = globalThis.indexedDB.open('icebreaker-stats', 1);
@@ -25,6 +40,7 @@ function openDatabase(): Promise<IDBDatabase | null> {
       request.onerror = unavailable;
       request.onblocked = unavailable;
       request.onupgradeneeded = () => {
+        if (abandoned) { request.transaction?.abort(); return; }
         const db = request.result;
         for (const name of ['events', 'sessions']) {
           const store = db.createObjectStore(name, { keyPath: 'session' });
@@ -34,12 +50,20 @@ function openDatabase(): Promise<IDBDatabase | null> {
       request.onsuccess = () => {
         const db = request.result;
         if (abandoned) { db.close(); return; }
-        db.onversionchange = () => { db.close(); database = undefined; };
+        connection = db;
+        db.onversionchange = () => { db.close(); forgetConnection(db); };
+        db.onclose = () => forgetConnection(db);
         resolve(db);
       };
     } catch { resolve(null); }
   });
-  return database;
+  database = attempt;
+  void attempt.then(db => {
+    // Includes synchronous denial and missing APIs. An old blocked request's
+    // late success/close must not invalidate a newer connection.
+    if (!db && database === attempt) database = undefined;
+  });
+  return attempt;
 }
 
 function copyEvents(events: StoredKey[]): StoredKey[] {
@@ -55,37 +79,60 @@ export async function saveSession(events: StoredKey[], meta: {
   const record: EventRecord = {
     session: meta.session, dict: meta.dict, endedAt: meta.endedAt, events: copyEvents(events),
   };
-  memory.set(meta.session, { meta: savedMeta, record });
+  const saved = { meta: savedMeta, record };
+  memory.set(meta.session, saved);
+  pending.set(meta.session, saved);
+  // Serialize retries, including duplicate session IDs. Old completions cannot
+  // clear a newer pending snapshot or write over a newer committed snapshot.
+  const operation = writes.then(() => persistPending(saved));
+  writes = operation.then(() => {});
+  return operation;
+}
+
+async function persistPending(current: SavedSession): Promise<SessionSaveStatus> {
+  let db: IDBDatabase | null = null;
   try {
-    const db = await openDatabase();
+    db = await openDatabase();
     if (!db) return 'memory';
+    const batch = Array.from(pending.values());
+    if (!batch.length) return memory.get(current.meta.session) === current ? 'persistent' : 'memory';
+    const target = db;
     await new Promise<void>((resolve, reject) => {
-      // Metadata and all raw events are committed together at round end.
-      const transaction = db.transaction(['events', 'sessions'], 'readwrite');
+      // Recover previous memory-only rounds on the next successful save, with
+      // both stores atomic. No background polling, data clearing or schema reset.
+      const transaction = target.transaction(['events', 'sessions'], 'readwrite');
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () => reject(transaction.error);
       try {
-        transaction.objectStore('events').put(record);
-        transaction.objectStore('sessions').put(savedMeta);
+        for (const saved of batch) {
+          transaction.objectStore('events').put(saved.record);
+          transaction.objectStore('sessions').put(saved.meta);
+        }
       } catch (error) {
         transaction.abort();
         reject(error);
       }
     });
-    return 'persistent';
-  } catch {
+    for (const saved of batch) {
+      if (pending.get(saved.meta.session) === saved) pending.delete(saved.meta.session);
+    }
+    return batch.includes(current) ? 'persistent' : 'memory';
+  } catch (error) {
+    recoverClosedConnection(db, error);
     // The complete session is still available until this page is closed/reloaded.
     return 'memory';
   }
 }
 
 async function readRecords<T>(name: string, dict?: string): Promise<T[]> {
+  let db: IDBDatabase | null = null;
   try {
-    const db = await openDatabase();
+    db = await openDatabase();
     if (!db) return [];
+    const target = db;
     return await new Promise<T[]>((resolve, reject) => {
-      const transaction = db.transaction(name, 'readonly');
+      const transaction = target.transaction(name, 'readonly');
       const store = transaction.objectStore(name);
       const request = dict === undefined ? store.getAll() : store.index('dict').getAll(dict);
       let records: T[] = [];
@@ -95,7 +142,10 @@ async function readRecords<T>(name: string, dict?: string): Promise<T[]> {
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () => reject(transaction.error);
     });
-  } catch { return []; }
+  } catch (error) {
+    recoverClosedConnection(db, error);
+    return [];
+  }
 }
 
 export async function loadEvents(dict?: string): Promise<StoredKey[]> {

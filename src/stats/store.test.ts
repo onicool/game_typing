@@ -32,6 +32,66 @@ async function untilTransaction(db: ReturnType<typeof databaseFixture>['db']) {
   expect(db.transaction).toHaveBeenCalledWith(['events', 'sessions'], 'readwrite');
 }
 
+/** A controllable transaction model; browser checks use real IndexedDB too. */
+function recoveryFixture() {
+  type Row = { session: string; dict: string; [key: string]: unknown };
+  type Transaction = { oncomplete: null | (() => void); onabort: null | (() => void);
+    error: DOMException; objectStore(name: string): { put(row: Row): void;
+      getAll(): object; index(name: string): { getAll(dict: string): object } }; abort(): void };
+  const disk = new Map(['events', 'sessions'].map(name => [name, new Map<string, Row>()]));
+  const held: { commit(): void; abort(): void }[] = [];
+  let holdWrites = false;
+  let failure: 'throw' | 'error' | 'blocked' | null = null;
+  const connections: { closed: boolean; close: () => void; onclose: null | (() => void);
+    onversionchange: null | (() => void); transaction: ReturnType<typeof vi.fn> }[] = [];
+  const requests: { result: typeof connections[number]; onsuccess: null | (() => void);
+    onerror: null | (() => void); onblocked: null | (() => void) }[] = [];
+  const open = vi.fn(() => {
+    if (failure === 'throw') throw new DOMException('temporary denial', 'SecurityError');
+    const db: typeof connections[number] = { closed: false, close: vi.fn(() => { db.closed = true; }),
+      onclose: null, onversionchange: null, transaction: vi.fn((_names: unknown, mode: string) => {
+        if (db.closed) throw new DOMException('closed', 'InvalidStateError');
+        const staged = new Map<string, Row[]>();
+        const tx: Transaction = { oncomplete: null, onabort: null,
+          error: new DOMException('quota', 'QuotaExceededError'), abort: () => tx.onabort?.(),
+          objectStore: name => {
+            const get = (dict?: string) => {
+              const request = { result: [...disk.get(name)!.values()].filter(row => dict === undefined || row.dict === dict),
+                onsuccess: null as null | (() => void) };
+              queueMicrotask(() => request.onsuccess?.());
+              return request;
+            };
+            return { put: row => staged.set(name, [...(staged.get(name) ?? []), structuredClone(row)]),
+              getAll: () => get(), index: () => ({ getAll: dict => get(dict) }) };
+          } };
+        const control = { commit: () => {
+          for (const [name, rows] of staged) for (const row of rows) disk.get(name)!.set(row.session, row);
+          tx.oncomplete?.();
+        }, abort: tx.abort };
+        if (mode === 'readwrite' && holdWrites) held.push(control);
+        // IndexedDB completes after its requests' success handlers. A single
+        // microtask here wrongly resolved reads before getAll delivered rows.
+        else queueMicrotask(() => queueMicrotask(control.commit));
+        return tx;
+      }) };
+    const request = { result: db, onsuccess: null as null | (() => void),
+      onerror: null as null | (() => void), onblocked: null as null | (() => void) };
+    connections.push(db); requests.push(request);
+    const failed = failure;
+    queueMicrotask(() => failed === 'error' ? request.onerror?.() : failed === 'blocked'
+      ? request.onblocked?.() : request.onsuccess?.());
+    return request;
+  });
+  vi.stubGlobal('indexedDB', { open });
+  return { disk, held, connections, requests, open,
+    fail: (kind: typeof failure) => { failure = kind; }, hold: () => { holdWrites = true; } };
+}
+
+async function untilHeld(held: ReturnType<typeof recoveryFixture>['held'], count = 1) {
+  for (let i = 0; i < 30 && held.length < count; i++) await Promise.resolve();
+  expect(held).toHaveLength(count);
+}
+
 describe('session save status', () => {
   it('keeps an independent, readable snapshot when IndexedDB is unavailable', async () => {
     vi.stubGlobal('indexedDB', undefined);
@@ -97,5 +157,118 @@ describe('session save status', () => {
     expect(await saveSession([{ ...event, key: 'b' }], { ...meta, accuracy: 0.5 })).toBe('memory');
     expect((await loadEvents(meta.dict)).map(e => e.key)).toEqual(['b']);
     expect(await loadSessions(meta.dict)).toEqual([{ ...meta, accuracy: 0.5 }]);
+  });
+
+  it.each(['throw', 'error', 'blocked'] as const)('recovers from open %s and commits all pending rounds on the next save', async failure => {
+    const fixture = recoveryFixture(); fixture.fail(failure);
+    const { saveSession, loadEvents, loadSessions } = await import('./store');
+    expect(await saveSession([event], meta)).toBe('memory');
+    fixture.fail(null);
+    const next = { ...meta, session: 'next-session', endedAt: 2000 };
+    expect(await saveSession([{ ...event, session: next.session, key: 'b' }], next)).toBe('persistent');
+    expect(fixture.disk.get('events')!.size).toBe(2);
+    expect(fixture.disk.get('sessions')!.size).toBe(2);
+    expect((await loadEvents()).map(e => e.key)).toEqual(['a', 'b']);
+    expect(await loadSessions()).toEqual([meta, next]);
+    expect(fixture.open).toHaveBeenCalledTimes(2);
+    vi.resetModules(); const reopened = await import('./store');
+    expect((await reopened.loadEvents()).map(e => e.key)).toEqual(['a', 'b']);
+  });
+
+  it('recovers a missing API and coalesces concurrent opens without duplicating a retried session', async () => {
+    vi.stubGlobal('indexedDB', undefined);
+    const { saveSession, loadEvents, loadSessions } = await import('./store');
+    expect(await saveSession([event], meta)).toBe('memory');
+    const fixture = recoveryFixture();
+    await Promise.all([loadEvents(), loadSessions()]);
+    expect(fixture.open).toHaveBeenCalledTimes(1);
+    expect(await saveSession([{ ...event, key: 'b' }], { ...meta, accuracy: 0.5 })).toBe('persistent');
+    expect(fixture.disk.get('events')!.size).toBe(1);
+    expect((await loadEvents()).map(e => e.key)).toEqual(['b']);
+    expect(await loadSessions()).toEqual([{ ...meta, accuracy: 0.5 }]);
+  });
+
+  it('keeps both stores unchanged on abort and retries the complete batch without changing original records', async () => {
+    const fixture = recoveryFixture(); const { saveSession } = await import('./store');
+    const original = { ...meta, session: 'original' };
+    expect(await saveSession([{ ...event, session: original.session }], original)).toBe('persistent');
+    fixture.hold();
+    const failed = saveSession([event], meta); await untilHeld(fixture.held);
+    fixture.held[0].abort(); expect(await failed).toBe('memory');
+    expect(fixture.disk.get('events')!.size).toBe(1);
+    expect(fixture.disk.get('sessions')!.size).toBe(1);
+    const retry = saveSession([{ ...event, key: 'b' }], meta); await untilHeld(fixture.held, 2);
+    fixture.held[1].commit(); expect(await retry).toBe('persistent');
+    expect(fixture.disk.get('events')!.size).toBe(2);
+    expect(fixture.disk.get('sessions')!.get('original')).toEqual(original);
+    expect(fixture.disk.get('events')!.get(meta.session)!.events).toEqual([{ ...event, key: 'b' }]);
+  });
+
+  it('does not let an old transaction completion clear a newer snapshot of the same session', async () => {
+    const fixture = recoveryFixture(); fixture.hold();
+    const { saveSession, loadEvents } = await import('./store');
+    const old = saveSession([event], meta); await untilHeld(fixture.held);
+    const newer = saveSession([{ ...event, key: 'b' }], { ...meta, accuracy: 0.5 });
+    await Promise.resolve(); expect(fixture.held).toHaveLength(1);
+    fixture.held[0].commit(); expect(await old).toBe('persistent');
+    await untilHeld(fixture.held, 2);
+    expect(fixture.disk.get('events')!.get(meta.session)!.events).toEqual([event]);
+    expect((await loadEvents()).map(e => e.key)).toEqual(['b']);
+    fixture.held[1].commit(); expect(await newer).toBe('persistent');
+    expect(fixture.disk.get('events')!.size).toBe(1);
+    expect(fixture.disk.get('sessions')!.get(meta.session)!.accuracy).toBe(0.5);
+  });
+
+  it('does not mark a superseded queued snapshot as persistent or overwrite the latest one', async () => {
+    const fixture = recoveryFixture(); const { saveSession, loadEvents } = await import('./store');
+    const old = saveSession([event], meta);
+    const latest = saveSession([{ ...event, key: 'b' }], meta);
+    expect(await old).toBe('memory'); expect(await latest).toBe('persistent');
+    expect(fixture.disk.get('events')!.size).toBe(1);
+    expect((await loadEvents()).map(e => e.key)).toEqual(['b']);
+  });
+
+  it.each(['close-event', 'versionchange', 'closed-write', 'closed-read'] as const)('reopens after %s without discarding pending records', async reason => {
+    const fixture = recoveryFixture(); const { saveSession, loadSessions } = await import('./store');
+    await saveSession([event], meta);
+    const original = fixture.connections[0];
+    if (reason === 'close-event') { original.close(); original.onclose!(); }
+    else if (reason === 'versionchange') original.onversionchange!();
+    else {
+      original.close();
+      if (reason === 'closed-read') expect(await loadSessions()).toEqual([meta]);
+      else expect(await saveSession([{ ...event, key: 'b' }], meta)).toBe('memory');
+    }
+    expect(await saveSession([{ ...event, key: 'c' }], meta)).toBe('persistent');
+    expect(fixture.open).toHaveBeenCalledTimes(2);
+    expect(fixture.disk.get('events')!.size).toBe(1);
+    expect(fixture.disk.get('events')!.get(meta.session)!.events).toEqual([{ ...event, key: 'c' }]);
+  });
+
+  it('closes an abandoned open without invalidating a later healthy connection', async () => {
+    const fixture = recoveryFixture(); fixture.fail('blocked');
+    const { saveSession } = await import('./store');
+    expect(await saveSession([event], meta)).toBe('memory'); fixture.fail(null);
+    expect(await saveSession([event], meta)).toBe('persistent');
+    fixture.requests[0].onsuccess!();
+    expect(fixture.connections[0].close).toHaveBeenCalledTimes(1);
+    fixture.connections[0].onclose?.();
+    fixture.connections[1].onversionchange!();
+    expect(await saveSession([event], meta)).toBe('persistent');
+    fixture.connections[1].onclose?.();
+    expect(await saveSession([event], meta)).toBe('persistent');
+    expect(fixture.open).toHaveBeenCalledTimes(3);
+  });
+
+  it('aborts an abandoned request before a late schema upgrade can change stores', async () => {
+    const createObjectStore = vi.fn(); const abort = vi.fn();
+    const request = { result: { createObjectStore }, transaction: { abort },
+      onblocked: null as null | (() => void), onupgradeneeded: null as null | (() => void) };
+    vi.stubGlobal('indexedDB', { open: () => { queueMicrotask(() => request.onblocked?.()); return request; } });
+    const { saveSession } = await import('./store');
+    expect(await saveSession([event], meta)).toBe('memory');
+    request.onupgradeneeded!();
+    expect(abort).toHaveBeenCalledTimes(1);
+    expect(createObjectStore).not.toHaveBeenCalled();
   });
 });

@@ -118,3 +118,30 @@ These are artificial failures, not physical audio-device, OS sleep, sound
 listening or cross-browser tests. The existing 300 ms analysis unit gate is
 sensitive to shared-host contention: the initial parallel run took 325.92 ms;
 the full 159-test run passed serially. No threshold was relaxed.
+
+IndexedDB recovery and stale completion checks use the production preview:
+
+```sh
+npm test -- --maxWorkers=1
+npm run build
+python checks/idb_recovery_check.py http://127.0.0.1:5183
+```
+
+The check builds `storage-fixtures.ts` with installed Vite, serves it only through
+a test route for an isolated native transaction race, and uses the preview UI for
+11 other scenarios. It seeds an original artificial record; injects temporary
+open failures, closed connections, transaction aborts and delayed completion;
+restores access; and compares complete records after reload, including the NaN
+first-key interval. It also checks that late abandoned success leaves the healthy
+connection cached, same-ID retries remain unique, and old success/abort callbacks
+leave the current result pending until its own save completes. Results are in
+`/tmp/game-typing-qa/idb-recovery-cycle/results.json`.
+
+Pending memory-only writes are retried at the next save; report reads reconnect
+but do not automatically commit them. Reload/close before a successful retry still
+loses memory-only data. No data clearing or schema reset is used. Actual full
+disk/quota, browser permission changes, OS failures, other browsers and conflicting
+cross-tab writers remain unverified. Unit fixtures model request-success before
+transaction completion, which the earlier interrupted fixture got wrong; the
+original assertions are retained. All 172 unit cases and the production build
+passed, with the existing analysis performance threshold unchanged.
