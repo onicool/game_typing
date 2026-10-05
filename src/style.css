@@ -123,9 +123,13 @@ kbd { border: 1px solid #2c434e; padding: 3px 7px; margin-right: 6px; color: #9a
 .sound-controls { gap: 10px; }
 .sound-controls button { font: inherit; letter-spacing: inherit; color: #b4c9d0; background: #080f16; border: 1px solid #2a4a52; padding: 4px 8px; cursor: pointer; }
 .sound-controls button:hover { border-color: var(--cyan); }
-.sound-controls :focus-visible, .settings-options button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
+.sound-controls :focus-visible, .settings-options button:focus-visible, .pause-actions button:focus-visible, .ov-options button:focus-visible, .pause-trigger:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
 .sound-controls input { width: 100px; height: 18px; accent-color: var(--cyan); cursor: pointer; margin: 0; }
-.overlay-open .footer-controls > span:first-child, .overlay-open .footer .center, .overlay-open .footer > .signal { visibility: hidden; }
+.sound-control-help { font-size: 0.9em; letter-spacing: 0; }
+.overlay-open .sound-control-help { display: none; }
+.modal-open .footer { opacity: 0.4; }
+#input-panel:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
+.overlay-open .footer-controls > :first-child, .overlay-open .footer .center, .overlay-open .footer > .signal { visibility: hidden; }
 
 #edge-flash { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 30px #ff304f; opacity: 0; z-index: 5; }
 #edge-flash.on { animation: edge 220ms ease-out; }
@@ -142,6 +146,7 @@ kbd { border: 1px solid #2c434e; padding: 3px 7px; margin-right: 6px; color: #9a
 .ov-options { display: flex; flex-wrap: wrap; gap: 18px 24px; margin-top: 28px; font-size: 14px; color: #9ab0b8; }
 .ov-box .start-help { font-size: 15px; line-height: 1.8; padding: 14px 18px; border-left: 2px solid var(--cyan); background: #0b1a20; color: #d3e1e6; }
 .ov-options b { color: var(--cyan); font-weight: 400; margin-left: 6px; }
+.ov-options button, .pause-actions button, .pause-trigger { font: inherit; color: inherit; background: transparent; border: 1px solid #2a4a52; padding: 6px 10px; cursor: pointer; }
 .ov-start { margin-top: 40px; font-size: 18px; letter-spacing: 4px; color: var(--cyan); animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.45; } }
 .ov-best { margin-top: 18px; font-size: 13px; }

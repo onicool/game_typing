@@ -61,6 +61,7 @@ with sync_playwright() as p:
     page.keyboard.press('Space')
     page.wait_for_selector('#ready-help:not(.hidden)')
     guide=page.locator('#romaji').inner_text()
+    page.keyboard.press('Tab'); assert focus_id(page)=='pause-trigger'
     page.keyboard.press('Tab'); assert focus_id(page)=='sound-toggle'
     page.keyboard.press('Space'); page.keyboard.press('d')
     page.keyboard.press('Tab'); assert focus_id(page)=='sound-volume'
@@ -72,9 +73,13 @@ with sync_playwright() as p:
     assert page.locator('#timer').inner_text()=='RUN 00:60 / 最初のキーでスタート'
     page.screenshot(path='/tmp/game-typing-qa/keyboard-play-focus-1280.png')
     page.keyboard.press('Escape')
+    assert focus_id(page)=='input-panel'
+    assert not page.locator('#pause-screen').is_visible()
+    page.keyboard.press('Escape')
     page.wait_for_selector('#pause-screen:not(.hidden)')
-    assert page.evaluate("document.activeElement.tagName === 'BODY'")
+    assert focus_id(page)=='pause-resume'
     page.keyboard.press('Enter')
+    assert focus_id(page)=='input-panel'
     page.keyboard.type(guide,delay=5)
     assert page.locator('#chain').inner_text()!='0'
     assert page.locator('#accuracy-note').inner_text()=='ミス 0'

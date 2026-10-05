@@ -8,6 +8,7 @@ import { analyze } from './stats/analyze';
 import { loadEvents, loadSessions, saveSession } from './stats/store';
 import type { Report, StoredKey, Vuln } from './stats/types';
 import { renderReport } from './ui/report';
+import { DialogFocus } from './ui/dialog';
 import { loadBaselines, updateBaselines } from './stats/baselines';
 import { PatchSource } from './stats/select';
 import { createSettingsStore, isBoolean, isDictionaryIndex, isEffectLevel, isNonNegativeNumber, isSpellingPreferences, isVolume } from './storage/settings';
@@ -25,6 +26,7 @@ const store = createSettingsStore(issue => {
 });
 
 const stage = $('stage');
+const dialogFocus = new DialogFocus(stage);
 const scene = new Scene($<HTMLCanvasElement>('scene'));
 const audio = new Audio();
 
@@ -139,10 +141,9 @@ function cycleEffect(key: Effect) {
 }
 
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-effect]')) {
-  button.addEventListener('mousedown', (e) => e.preventDefault());
-  button.addEventListener('click', (e) => {
+  button.addEventListener('click', () => {
+    button.focus({ preventScroll: true });
     cycleEffect(button.dataset.effect as Effect);
-    if (e.detail > 0) button.blur();
   });
 }
 
@@ -241,8 +242,11 @@ function renderClock(now: number) {
 // ---- flow -----------------------------------------------------------------
 
 function showOverlay(id: 'title-screen' | 'result-screen' | 'report-screen' | 'pause-screen' | 'settings-screen' | null) {
+  const origin = document.activeElement;
   for (const o of ['title-screen', 'result-screen', 'report-screen', 'pause-screen', 'settings-screen']) $(o).classList.toggle('hidden', id !== o);
   stage.classList.toggle('overlay-open', id !== null);
+  dialogFocus.show(id === 'pause-screen' || id === 'settings-screen' ? $(id) : null, origin);
+  stage.classList.toggle('modal-open', dialogFocus.active);
 }
 
 function pauseRound(t: number) {
@@ -271,6 +275,19 @@ function closeSettings() {
   settingsOpen = false;
   showOverlay('title-screen');
 }
+
+function openSettings() {
+  if (mode !== 'title' || settingsOpen) return;
+  settingsOpen = true;
+  showOverlay('settings-screen');
+}
+
+$('open-settings').addEventListener('click', openSettings);
+$('close-settings').addEventListener('click', closeSettings);
+$('pause-trigger').addEventListener('click', () => pauseRound(performance.now()));
+$('pause-resume').addEventListener('click', () => resumeRound(performance.now()));
+$('pause-retry').addEventListener('click', () => startRound(lastRun));
+$('pause-title-return').addEventListener('click', toTitle);
 
 async function openReport() {
   if (mode !== 'report') reportReturn = mode;
@@ -471,8 +488,49 @@ function toTitle() {
 
 window.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const editable = e.target instanceof HTMLElement && e.target.closest('input, select, textarea, [contenteditable]');
+  // Composition can use Enter/Escape to confirm/cancel text. It must never
+  // trigger a menu action, resume a round, or enter the typing log.
+  if (e.isComposing || e.key === 'Process' || e.keyCode === 229) {
+    if (editable) return;
+    if (mode === 'play' && !round?.paused) els.ime.classList.remove('hidden');
+    e.preventDefault();
+    return;
+  }
+  if (dialogFocus.active) {
+    if (e.key === 'Tab') { dialogFocus.cycle(e); return; }
+    if (!dialogFocus.contains(e.target)) { e.preventDefault(); return; }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (!e.repeat) settingsOpen ? closeSettings() : toTitle();
+      return;
+    }
+    if (editable) return;
+    if (e.repeat) { e.preventDefault(); return; }
+    if (settingsOpen) {
+      if (e.key === '1') cycleEffect('shake');
+      else if (e.key === '2') cycleEffect('flash');
+      else if (e.key === '3') cycleEffect('motion');
+      else if (e.key.toLowerCase() === 's') closeSettings();
+    } else if (round?.paused) {
+      if (e.key.toLowerCase() === 'r') startRound(lastRun);
+      else if (e.key.toLowerCase() === 'q') toTitle();
+    }
+    // Space/Enter activate only the focused native button, on its normal event.
+    // All other modal keys finish here instead of reaching the game.
+    return;
+  }
+  if (mode === 'play' && e.key === 'Escape') {
+    e.preventDefault();
+    if (!e.repeat) {
+      if (e.target instanceof HTMLElement && e.target.closest('button, input, select, textarea, [contenteditable]')) {
+        $('input-panel').focus({ preventScroll: true });
+      } else pauseRound(e.timeStamp);
+    }
+    return;
+  }
   // Native controls own their keys. Tab follows the browser's focus order;
-  // Escape releases control focus and still performs the screen's usual action.
+  // Escape releases control focus on non-play screens.
   if (e.key === 'Tab') return;
   if (e.target instanceof HTMLElement && e.target.closest('button, input, select, textarea, [contenteditable]')) {
     if (e.key !== 'Escape') return;
@@ -480,27 +538,6 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.key === ' ') e.preventDefault();
 
-  // Paused keys are handled before composition or character input can reach Round.
-  if (mode === 'play' && round?.paused) {
-    if (e.repeat) return;
-    if (e.key === ' ' || e.key === 'Enter') resumeRound(e.timeStamp);
-    else if (e.key.toLowerCase() === 'r') startRound(lastRun);
-    else if (e.key.toLowerCase() === 'q' || e.key === 'Escape') toTitle();
-    return;
-  }
-  if (mode === 'title' && settingsOpen) {
-    if (e.repeat) return;
-    if (e.key === '1') cycleEffect('shake');
-    else if (e.key === '2') cycleEffect('flash');
-    else if (e.key === '3') cycleEffect('motion');
-    else if (e.key.toLowerCase() === 's' || e.key === 'Escape' || e.key === 'Enter') closeSettings();
-    return;
-  }
-  if (e.isComposing || e.key === 'Process' || e.keyCode === 229) {
-    els.ime.classList.remove('hidden');
-    e.preventDefault();
-    return;
-  }
   els.ime.classList.add('hidden');
   audio.ensure();
 
@@ -527,8 +564,7 @@ window.addEventListener('keydown', (e) => {
     } else if (e.key === 'm' || e.key === 'M') {
       toggleSound();
     } else if (e.key === 's' || e.key === 'S') {
-      settingsOpen = true;
-      showOverlay('settings-screen');
+      openSettings();
     }
     return;
   }
@@ -542,10 +578,6 @@ window.addEventListener('keydown', (e) => {
 
   // play
   if (!round) return;
-  if (e.key === 'Escape') {
-    if (!e.repeat) pauseRound(e.timeStamp);
-    return;
-  }
   if (e.repeat || e.key.length !== 1) return;
   if (round.finished) return;
   if (e.key === ' ' && !round.session.expected.includes(' ')) return;

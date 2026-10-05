@@ -75,7 +75,7 @@
         <span class="muted">shi / si どちらでも可　・　最初のキーでスタート</span>
       </div>
       <div class="layer-pips" id="layer-pips" role="img" aria-label="この防壁の突破済み層 0 / 5"><i></i><i></i><i></i><i></i><i></i></div>
-      <section class="input-panel" id="input-panel">
+      <section class="input-panel" id="input-panel" tabindex="-1" aria-label="タイピング入力">
         <div class="time-track" aria-hidden="true"><i id="time-bar"></i></div>
         <div class="input-head">
           <span class="input-label" id="input-label">INPUT // 001</span>
@@ -93,10 +93,11 @@
       </section>
 
       <footer class="footer">
-        <span class="footer-controls"><span><kbd>ESC</kbd> PAUSE</span>
+        <span class="footer-controls"><button type="button" class="pause-trigger" id="pause-trigger"><kbd>ESC</kbd> PAUSE</button>
           <span class="sound-controls">
             <button type="button" id="sound-toggle" aria-label="音声をミュート" aria-pressed="false"><span id="sound-icon" aria-hidden="true">🔊</span> <span id="sound-state">[ 音声 ON ]</span></button>
-            <input type="range" id="sound-volume" min="0" max="1" step="0.05" value="1" aria-label="音量" />
+            <input type="range" id="sound-volume" min="0" max="1" step="0.05" value="1" aria-label="音量" aria-describedby="sound-control-help" />
+            <span class="sound-control-help jp" id="sound-control-help">操作中は Esc で入力へ戻る</span>
           </span>
         </span>
         <span class="center"><span id="timer">RUN 00:60</span>　/　<span id="kps">0.0 字/秒</span></span>
@@ -114,7 +115,7 @@
             <span>辞書 <kbd>D</kbd> <b id="dict-name">日本語</b></span>
             <span>音声 <kbd>M</kbd></span>
             <span>脆弱性レポート <kbd>R</kbd></span>
-            <span>設定 <kbd>S</kbd></span>
+            <button type="button" id="open-settings">設定 <kbd>S</kbd></button>
           </div>
           <div class="ov-start"><kbd>SPACE</kbd> DIVE</div>
           <div class="ov-best muted" id="title-best"></div>
@@ -140,26 +141,26 @@
 
       <section class="overlay report hidden" id="report-screen"><div class="rp" id="report"></div></section>
 
-      <section class="overlay hidden" id="pause-screen" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+      <section class="overlay hidden" id="pause-screen" role="dialog" aria-modal="true" aria-labelledby="pause-title" aria-describedby="pause-note" tabindex="-1">
         <div class="ov-box pause-box">
           <div class="eyebrow">[ LINK SUSPENDED ]</div>
           <h1 id="pause-title">一時停止</h1>
           <p class="jp muted" id="pause-note">時計と入力を停止しています。</p>
-          <div class="pause-actions jp"><span><kbd>SPACE / ENTER</kbd> 再開</span><span><kbd>R</kbd> やり直し</span><span><kbd>Q / ESC</kbd> タイトルへ</span></div>
+          <div class="pause-actions jp"><button type="button" id="pause-resume"><kbd>SPACE / ENTER</kbd> 再開</button><button type="button" id="pause-retry"><kbd>R</kbd> やり直し</button><button type="button" id="pause-title-return"><kbd>Q / ESC</kbd> タイトルへ</button></div>
         </div>
       </section>
 
-      <section class="overlay hidden" id="settings-screen" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <section class="overlay hidden" id="settings-screen" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-describedby="settings-help" tabindex="-1">
         <div class="ov-box settings-box">
           <div class="eyebrow">[ EFFECT SETTINGS ]</div>
           <h1 id="settings-title">演出設定</h1>
-          <p class="jp muted">オフ / 弱 / 標準 を切り替えます。</p>
+          <p class="jp muted" id="settings-help">Tab で移動、Space / Enter で変更。オフ / 弱 / 標準を切り替えます。</p>
           <div class="settings-options jp">
             <button type="button" data-effect="shake"><span><kbd>1</kbd> 画面の揺れ</span><b id="setting-shake">標準</b></button>
             <button type="button" data-effect="flash"><span><kbd>2</kbd> フラッシュ</span><b id="setting-flash">標準</b></button>
             <button type="button" data-effect="motion"><span><kbd>3</kbd> 動き</span><b id="setting-motion">標準</b></button>
           </div>
-          <div class="ov-options jp"><span><kbd>S / ESC / ENTER</kbd> タイトルへ</span></div>
+          <div class="ov-options jp"><button type="button" id="close-settings"><kbd>S / ESC</kbd> タイトルへ</button></div>
         </div>
       </section>
 
