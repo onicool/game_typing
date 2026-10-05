@@ -326,3 +326,25 @@ records. The current UI announces partial history and clears it on healthy reope
 Closed report reads use AbortSignal; cancelled reads never evict pending data or
 announce a storage outage. Native large-query cancellation/max-long-task reruns
 were left for resumption after the user requested a stop; unit checks pass.
+
+# 天使UI統合の追加確認
+
+本番ビルドのrootを使います。既存のPlaywright PythonとChromiumが必要で、
+ゲーム本体のnpm依存追加はありません。出力先は新しい未作成ディレクトリを指定。
+
+```sh
+python checks/angel_integration_check.py http://127.0.0.1:5201 /tmp/game-typing-qa/angel-review-new
+python checks/angel_real_timer_check.py http://127.0.0.1:5201 /tmp/game-typing-qa/angel-clock-new
+```
+
+前者はfresh contextと固有QA DBで7土地・2人・別綴り・先読み・IME/操作キー・
+停止復帰・native保存競合・読み書き障害と回復・長文の完了/途中/追従・
+JP/EN計測/PB除外・分析から弱点練習・設定原文保全・5画面サイズ・素材/音声障害を確認。
+期限を人工的に進める計測例と、弱点を確実に出す人工診断ログを区別しています。
+後者は通常rAF・実時計で60秒計測を1回走らせます。物理入力/表示遅延は測りません。
+本体のdebug exportや既存ユーザーDBの読取りは使用しません。
+
+既存のキーボード・設定・ダイアログ・IDB検証は統合ビルドの`/legacy.html`で
+同じものを再実行できます。固定された過去の出力先を上書きしないよう、
+再検証時はハーネスのコピーを作り、専用の新規出力先に置き換えてください。
+検証の失敗・訂正・未確認事項は [INTEGRATION_REVIEW.md](../INTEGRATION_REVIEW.md)。

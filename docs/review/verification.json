@@ -1,0 +1,1021 @@
+{
+  "source_plan_commit": "31a75f3c17abe4ce0e8e21d4a2b951ce3c58427a",
+  "intermediate_commit": "8fe15cb6ed187bc6c06e3ea3c6927a28b7a69630",
+  "data": "Fresh browser contexts and isolated artificial QA databases only",
+  "unit_tests": {
+    "passed": 213,
+    "files": 11,
+    "includes_preexisting_cases": 199,
+    "last_run_utc": "2026-10-05T15:54:52Z",
+    "scope": "Round, typing, persistence, analysis and existing regressions; latest CSS crop was verified by production browser rerun"
+  },
+  "production_build": {
+    "passed": true,
+    "includes_typecheck": true,
+    "entries": [
+      "index.html",
+      "legacy.html"
+    ],
+    "angel_js": "angel-D9frKcF8.js",
+    "angel_css": "angel-5LcQXiFp.css"
+  },
+  "integration": {
+    "browser": "151.0.7922.173",
+    "url": "http://127.0.0.1:5201",
+    "cases": [
+      {
+        "case": "place",
+        "place": 1,
+        "character": "elna",
+        "dict": "jp-angel-heaven",
+        "keys": 66,
+        "layout": {
+          "scrollY": 0,
+          "overflowX": false,
+          "panelInside": true,
+          "nodes": [
+            {
+              "id": "word",
+              "font": 44,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "reading",
+              "font": 15,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "romaji",
+              "font": 29,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-word",
+              "font": 19,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-word",
+              "font": 17,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            }
+          ],
+          "cursors": []
+        },
+        "passed": true
+      },
+      {
+        "case": "place",
+        "place": 2,
+        "character": "towa",
+        "dict": "jp-angel-town",
+        "keys": 66,
+        "layout": {
+          "scrollY": 0,
+          "overflowX": false,
+          "panelInside": true,
+          "nodes": [
+            {
+              "id": "word",
+              "font": 44,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "reading",
+              "font": 15,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "romaji",
+              "font": 29,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-word",
+              "font": 19,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-word",
+              "font": 17,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            }
+          ],
+          "cursors": []
+        },
+        "passed": true
+      },
+      {
+        "case": "place",
+        "place": 3,
+        "character": "elna",
+        "dict": "jp-angel-road",
+        "keys": 79,
+        "layout": {
+          "scrollY": 0,
+          "overflowX": false,
+          "panelInside": true,
+          "nodes": [
+            {
+              "id": "word",
+              "font": 44,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "reading",
+              "font": 15,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "romaji",
+              "font": 29,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-word",
+              "font": 19,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-word",
+              "font": 17,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            }
+          ],
+          "cursors": []
+        },
+        "passed": true
+      },
+      {
+        "case": "place",
+        "place": 4,
+        "character": "towa",
+        "dict": "jp-angel-canal",
+        "keys": 81,
+        "layout": {
+          "scrollY": 0,
+          "overflowX": false,
+          "panelInside": true,
+          "nodes": [
+            {
+              "id": "word",
+              "font": 44,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "reading",
+              "font": 15,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "romaji",
+              "font": 29,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-word",
+              "font": 19,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-word",
+              "font": 17,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            }
+          ],
+          "cursors": []
+        },
+        "passed": true
+      },
+      {
+        "case": "place",
+        "place": 5,
+        "character": "elna",
+        "dict": "jp-angel-theatre",
+        "keys": 70,
+        "layout": {
+          "scrollY": 0,
+          "overflowX": false,
+          "panelInside": true,
+          "nodes": [
+            {
+              "id": "word",
+              "font": 44,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "reading",
+              "font": 15,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "romaji",
+              "font": 29,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-word",
+              "font": 19,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-word",
+              "font": 17,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            }
+          ],
+          "cursors": []
+        },
+        "passed": true
+      },
+      {
+        "case": "place",
+        "place": 6,
+        "character": "towa",
+        "dict": "jp-angel-snow",
+        "keys": 62,
+        "layout": {
+          "scrollY": 0,
+          "overflowX": false,
+          "panelInside": true,
+          "nodes": [
+            {
+              "id": "word",
+              "font": 44,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "reading",
+              "font": 15,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "romaji",
+              "font": 29,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-word",
+              "font": 19,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-word",
+              "font": 17,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            }
+          ],
+          "cursors": []
+        },
+        "passed": true
+      },
+      {
+        "case": "place",
+        "place": 7,
+        "character": "elna",
+        "dict": "jp-angel-city",
+        "keys": 70,
+        "layout": {
+          "scrollY": 0,
+          "overflowX": false,
+          "panelInside": true,
+          "nodes": [
+            {
+              "id": "word",
+              "font": 44,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "reading",
+              "font": 15,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "romaji",
+              "font": 29,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-word",
+              "font": 19,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-word",
+              "font": 17,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            }
+          ],
+          "cursors": []
+        },
+        "passed": true
+      },
+      {
+        "case": "all-seven-reload-report-and-original-row-preserved",
+        "passed": true
+      },
+      {
+        "case": "IME-controls-focus-pause-and-native-log-exclusion",
+        "passed": true,
+        "keys": 10
+      },
+      {
+        "case": "native-write-outage-read-partial-recovery-and-reload",
+        "passed": true
+      },
+      {
+        "case": "old-native-save-completion-cannot-confirm-new-result",
+        "passed": true
+      },
+      {
+        "case": "long-complete-partial-and-visible-cursor-tracking",
+        "passed": true,
+        "keys": 173,
+        "samples": 12
+      },
+      {
+        "case": "JP-English-benchmark-and-interrupted-PB-exclusion",
+        "passed": true,
+        "synthetic_deadline": true
+      },
+      {
+        "case": "report-native-targeted-patch-and-PB-exclusion",
+        "passed": true,
+        "synthetic_diagnostic_fixture": true,
+        "native_patch_keys": 29
+      },
+      {
+        "case": "malformed-settings-original-bytes-and-native-slider-preserved",
+        "passed": true
+      },
+      {
+        "case": "five-desktop-sizes-and-reduced-motion",
+        "passed": true,
+        "layouts": [
+          {
+            "size": [
+              1920,
+              1080
+            ],
+            "scrollY": 0,
+            "overflowX": false,
+            "panelInside": true,
+            "nodes": [
+              {
+                "id": "word",
+                "font": 44,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "reading",
+                "font": 15,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "romaji",
+                "font": 29,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-word",
+                "font": 19,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-word",
+                "font": 17,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              }
+            ],
+            "cursors": []
+          },
+          {
+            "size": [
+              1366,
+              768
+            ],
+            "scrollY": 0,
+            "overflowX": false,
+            "panelInside": true,
+            "nodes": [
+              {
+                "id": "word",
+                "font": 44,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "reading",
+                "font": 15,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "romaji",
+                "font": 29,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-word",
+                "font": 19,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-word",
+                "font": 17,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              }
+            ],
+            "cursors": []
+          },
+          {
+            "size": [
+              1024,
+              768
+            ],
+            "scrollY": 0,
+            "overflowX": false,
+            "panelInside": true,
+            "nodes": [
+              {
+                "id": "word",
+                "font": 34.816,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "reading",
+                "font": 15,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "romaji",
+                "font": 22.528,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-word",
+                "font": 19,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-word",
+                "font": 17,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              }
+            ],
+            "cursors": []
+          },
+          {
+            "size": [
+              800,
+              600
+            ],
+            "scrollY": 0,
+            "overflowX": false,
+            "panelInside": true,
+            "nodes": [
+              {
+                "id": "word",
+                "font": 30,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "reading",
+                "font": 14,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "romaji",
+                "font": 22,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-word",
+                "font": 18,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-word",
+                "font": 15,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              }
+            ],
+            "cursors": []
+          },
+          {
+            "size": [
+              768,
+              1024
+            ],
+            "scrollY": 0,
+            "overflowX": false,
+            "panelInside": true,
+            "nodes": [
+              {
+                "id": "word",
+                "font": 32,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "reading",
+                "font": 15,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "romaji",
+                "font": 22,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-word",
+                "font": 18,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-word",
+                "font": 15,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              }
+            ],
+            "cursors": []
+          }
+        ]
+      },
+      {
+        "case": "low-graphics-all-assets-unavailable-audio-failure-save",
+        "passed": true
+      }
+    ],
+    "page_errors": [],
+    "captures": [
+      "stage-01.png",
+      "stage-02.png",
+      "stage-03.png",
+      "stage-04.png",
+      "stage-05.png",
+      "stage-06.png",
+      "stage-07.png"
+    ],
+    "synthetic_storage_only": true,
+    "real_60_second_run_not_performed": true
+  },
+  "real_timer": {
+    "passed": true,
+    "browser": "151.0.7922.173",
+    "real_elapsed_to_result_ms": 60027.20000000298,
+    "native_keys": 34,
+    "mode": "benchmark",
+    "page_errors": [],
+    "physical_device_latency_not_measured": true
+  },
+  "legacy_regressions": {
+    "keyboard": [
+      {
+        "case": "tab-native-sound-range-shift-tab-dictionary-shortcut-and-reload",
+        "passed": true
+      },
+      {
+        "case": "settings-controls-tab-space-retained-focus-escape",
+        "passed": true
+      },
+      {
+        "case": "control-keys-excluded-from-round-and-escape-resume",
+        "passed": true,
+        "page_errors": []
+      }
+    ],
+    "settings": [
+      {
+        "case": "corrupt-values-reload-and-new-context",
+        "passed": true,
+        "original_bytes_preserved": true,
+        "page_errors": []
+      },
+      {
+        "case": "external-repair-then-explicit-save-and-reload",
+        "passed": true
+      },
+      {
+        "case": "write-failure-memory-reload-recovery",
+        "passed": true,
+        "page_errors": []
+      },
+      {
+        "case": "read-access-denied-preservation-and-reload-recovery",
+        "passed": true,
+        "page_errors": []
+      }
+    ],
+    "dialog-input": [
+      {
+        "case": "dictionary-shortcut-only-unmodified-noncomposing-title",
+        "passed": true
+      },
+      {
+        "case": "settings-entry-cycle-background-isolation-native-activation-and-focus-return",
+        "passed": true
+      },
+      {
+        "case": "settings-native-editor-composition-and-empty-tab-list",
+        "passed": true
+      },
+      {
+        "case": "benchmark-d-caps-d-ignored-flags-pause-ime-and-burst-input",
+        "passed": true,
+        "seed": 8,
+        "logged_keys": 181,
+        "known_misses": 1
+      },
+      {
+        "case": "pause-native-opener-focus-return-control-escape-and-dialog-escape",
+        "passed": true
+      },
+      {
+        "case": "report-d-ignored-and-patch-d-counted-as-input",
+        "passed": true,
+        "logged_patch_keys": 29
+      }
+    ]
+  },
+  "legacy_idb": {
+    "app": [
+      {
+        "case": "throw",
+        "passed": true,
+        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 3,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "missing",
+        "passed": true,
+        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 3,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "error",
+        "passed": true,
+        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 3,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "blocked-late-success",
+        "passed": true,
+        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 4,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "transaction-abort",
+        "passed": true,
+        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 3,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "closed-connection",
+        "passed": true,
+        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 3,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "unexpected-close",
+        "passed": true,
+        "first_status": "今回の練習記録をこのブラウザに保存しました。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 3,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "versionchange",
+        "passed": true,
+        "first_status": "今回の練習記録をこのブラウザに保存しました。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 3,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "repeated-outage",
+        "passed": true,
+        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 4,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "delayed-complete-after-retry",
+        "passed": true,
+        "disk_sessions": 3,
+        "old_completion_did_not_change_current_result": true,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "delayed-abort-after-retry",
+        "passed": true,
+        "disk_sessions": 3,
+        "old_completion_did_not_change_current_result": true,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      }
+    ],
+    "native_store": [
+      {
+        "case": "same-id-recovery-and-in-flight-replacement",
+        "passed": true,
+        "statuses": {
+          "first": "memory",
+          "recovered": "persistent",
+          "olderStatus": "persistent",
+          "latestStatus": "persistent",
+          "memoryKeys": [
+            "d"
+          ]
+        },
+        "disk_sessions": 2,
+        "no_duplicate_or_stale_overwrite": true
+      }
+    ],
+    "browser": "151.0.7922.173"
+  },
+  "screenshots": [
+    {
+      "file": "docs/review/characters.webp",
+      "source": "/tmp/game-typing-qa/angel-integration/production-final-03/01-characters.png",
+      "dimensions": [
+        1366,
+        768
+      ],
+      "bytes": 68966,
+      "compression": "WebP quality 88, same dimensions, no composition"
+    },
+    {
+      "file": "docs/review/map.webp",
+      "source": "/tmp/game-typing-qa/angel-integration/production-final-03/02-map.png",
+      "dimensions": [
+        1366,
+        768
+      ],
+      "bytes": 142082,
+      "compression": "WebP quality 88, same dimensions, no composition"
+    },
+    {
+      "file": "docs/review/battle.webp",
+      "source": "/tmp/game-typing-qa/angel-integration/production-final-03/stage-01.png",
+      "dimensions": [
+        1366,
+        768
+      ],
+      "bytes": 153308,
+      "compression": "WebP quality 88, same dimensions, no composition"
+    },
+    {
+      "file": "docs/review/long-800x600.webp",
+      "source": "/tmp/game-typing-qa/angel-integration/production-final-03/06-long-800x600.png",
+      "dimensions": [
+        800,
+        600
+      ],
+      "bytes": 99672,
+      "compression": "WebP quality 88, same dimensions, no composition"
+    }
+  ],
+  "limits": [
+    "Headless Chromium 151 only",
+    "No physical input or display latency measurement",
+    "No user browser/profile read",
+    "No paid product comparison",
+    "No production deployment"
+  ]
+}

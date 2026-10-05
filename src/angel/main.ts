@@ -130,6 +130,8 @@ function renderPanel(miss = false) {
   if (!round || !run || view !== 'battle') return;
   const s = round.session, w = round.word, long = !!w.segments;
   const panel = $('input-panel'); panel.classList.toggle('long-input', long); panel.classList.toggle('miss', miss);
+  main.querySelector('.av-next > span')!.textContent = long ? '次の文章（冒頭）' : '次の言葉';
+  main.querySelector('.av-later > span')!.textContent = long ? 'その次の文章（冒頭）' : 'その次の言葉';
   if (panelWord !== w) {
     panelWord = w;
     $('word').innerHTML = w.segments ? w.segments.map(segment => `<span>${esc(segment.display)}</span>`).join('') : esc(w.display);
@@ -148,8 +150,10 @@ function renderPanel(miss = false) {
   $('input-label').textContent = long ? '長文 · 句読点は , と .' : run.mode === 'patch' ? `弱点練習 · ${run.focus}` : '言葉を唱える';
   const remaining = run.mode === 'journey' ? round.wordLimit - round.wordsDone - 1 : Infinity;
   for (const [prefix, word, available] of [['next', round.nextWord, remaining > 0], ['following', round.followingWord, remaining > 1]] as const) {
-    $(`${prefix}-word`).textContent = available ? word.display : 'この道中の終わり';
-    $(`${prefix}-guide`).textContent = available ? new TypingSession(word.reading, { prefs }).guide : '';
+    const preview = word.segments?.[0] ?? word;
+    $(`${prefix}-word`).textContent = available ? preview.display : 'この道中の終わり';
+    $(`${prefix}-word`).title = available ? word.display : '';
+    $(`${prefix}-guide`).textContent = available ? new TypingSession(preview.reading, { prefs }).guide : '';
   }
   const fraction = s.kanaDone / Math.max(1, normalizeReading(w.reading).length);
   $('seal').style.setProperty('--charge', `${fraction * 100}%`);
@@ -231,6 +235,8 @@ function end() {
 }
 async function showRecords() {
   read?.abort(); const controller = new AbortController(); read = controller; const token = ++request, dict = recordDict;
+  report = undefined;
+  $('report').setAttribute('aria-busy', 'true');
   let partial = false; const unavailable = () => { partial = true; };
   const [events, sessions] = await Promise.all([loadEvents(dict.id, unavailable, controller.signal), loadSessions(dict.id, unavailable, controller.signal)]);
   if (controller.signal.aborted || token !== request || view !== 'records') return;
