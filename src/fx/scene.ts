@@ -101,18 +101,33 @@ export class Scene {
   }
 
   /** Optional artwork: unavailable/loading images retain the procedural sky. */
-  setBackground(url: string) {
-    this.loadImage(url, image => { this.background = image; });
+  setBackground(url: string, fallbackUrl?: string) {
+    this.loadImage(url, fallbackUrl, image => { this.background = image; });
   }
 
-  setTarget(url: string) { this.loadImage(url, image => { this.target = image; }); }
+  setTarget(url: string, fallbackUrl?: string) {
+    this.loadImage(url, fallbackUrl, image => { this.target = image; });
+  }
 
-  private loadImage(url: string, ready: (image: HTMLImageElement) => void) {
+  private loadImage(url: string, fallbackUrl: string | undefined, ready: (image: HTMLImageElement) => void) {
     try {
       const image = new Image();
-      image.onload = () => { if (image.naturalWidth > 0 && image.naturalHeight > 0) ready(image); };
-      image.onerror = () => { /* Optional art keeps its procedural fallback. */ };
-      image.src = url;
+      const sources = fallbackUrl && fallbackUrl !== url ? [url, fallbackUrl] : [url];
+      let attempt = 0, settled = false;
+      const next = () => {
+        if (settled) return;
+        if (attempt >= sources.length) { settled = true; return; }
+        try { image.src = sources[attempt++]; }
+        catch { next(); } // Bounded to the optional primary + original PNG.
+      };
+      image.onload = () => {
+        if (settled) return;
+        if (image.naturalWidth > 0 && image.naturalHeight > 0) { settled = true; ready(image); }
+        else next();
+      };
+      image.onerror = next;
+      // No promise/await: the app starts with procedural scenery immediately.
+      next();
     } catch { /* Optional image construction must never prevent typing. */ }
   }
 

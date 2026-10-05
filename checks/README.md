@@ -219,3 +219,25 @@ shared-host load remains uncontrolled. A before-optimization sample is retained
 alongside final results. Scenery reservation now uses known CSS stage/panel
 geometry rather than forcing layout after every input DOM update. No product
 performance or paint/display-latency guarantee follows from these measurements.
+
+
+Lightweight stage assets are regenerated with the environment's existing Pillow:
+
+```sh
+python scripts/encode_stage_assets.py
+python checks/asset_load_check.py http://127.0.0.1:5186 http://127.0.0.1:5189
+```
+
+The encoder adds WebP copies and leaves PNG bytes untouched. It verifies identical
+repeat bytes, dimensions and alpha. Quality92 RGB is lossy; it is not a claim of
+pixel identity or perceptual equivalence. PNG originals remain available for a
+single bounded runtime retry. The optional encoder is not an app/build dependency.
+The second URL serves the retained `410d06b` production build using Vite preview,
+to match server/cache headers. Fresh artificial Chromium contexts instrument image
+load/first actual Canvas draw, native typing and persisted logs. CDP shapes 128 KiB/s
+and 80 ms latency; cold/warm observations include cache validation. Five pending/
+failure profiles cover stalled art, low/reduced motion, 404, corrupt WebP and both
+formats failing. WebGL returns null in all profiles; existing Canvas2D is sufficient.
+Outputs stay in `/tmp/game-typing-qa/asset-cycle/`. Stable fields compare every stored
+event property except per-run session/t/dt; saved profile records remain complete.
+Local shaping is not a real network/mobile/GPU/CDN or paint-latency guarantee.

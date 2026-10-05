@@ -33,8 +33,9 @@ const store = createSettingsStore(issue => {
 const stage = $('stage');
 const dialogFocus = new DialogFocus(stage);
 const scene = new Scene($<HTMLCanvasElement>('scene'));
-scene.setBackground(`${import.meta.env.BASE_URL}stages/skyway.png`);
-scene.setTarget(`${import.meta.env.BASE_URL}stages/aether-sentinel.png`);
+const stageAssets = `${import.meta.env.BASE_URL}stages/`;
+scene.setBackground(`${stageAssets}skyway.webp`, `${stageAssets}skyway.png`);
+scene.setTarget(`${stageAssets}aether-sentinel.webp`, `${stageAssets}aether-sentinel.png`);
 const audio = new Audio();
 
 type Mode = 'title' | 'play' | 'result' | 'report';

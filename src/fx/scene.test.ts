@@ -28,6 +28,72 @@ function setup(recordDrawCalls = true) {
 
 afterEach(() => vi.unstubAllGlobals());
 
+function pendingImages(throwSources: string[] = []) {
+  class TestImage {
+    naturalWidth = 0;
+    naturalHeight = 0;
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    requests: string[] = [];
+    constructor() { images.push(this); }
+    set src(source: string) {
+      this.requests.push(source);
+      if (throwSources.includes(source)) throw new Error('Synthetic URL rejection');
+    }
+    loaded() { this.naturalWidth = 32; this.naturalHeight = 24; this.onload?.(); }
+  }
+  const images: TestImage[] = [];
+  vi.stubGlobal('Image', TestImage);
+  return images;
+}
+
+describe('optional lightweight assets and bounded PNG fallback', () => {
+  it('uses successful WebP without fetching PNG and ignores later duplicate callbacks', () => {
+    const { scene } = setup(); const images = pendingImages();
+    scene.setBackground('/sky.webp', '/sky.png');
+    images[0].loaded(); images[0].onerror?.(); images[0].onload?.();
+    expect(images[0].requests).toEqual(['/sky.webp']);
+    expect((scene as unknown as { background: unknown }).background).toBe(images[0]);
+  });
+
+  it('tries the original PNG once after failure and keeps its successful dimensions', () => {
+    const { scene } = setup(); const images = pendingImages();
+    scene.setTarget('/enemy.webp', '/enemy.png'); images[0].onerror?.();
+    expect(images[0].requests).toEqual(['/enemy.webp', '/enemy.png']);
+    images[0].loaded();
+    expect((scene as unknown as { target: unknown }).target).toBe(images[0]);
+  });
+
+  it('does not stall accepted-key completion while both assets are still pending', () => {
+    const { scene, layer } = setup(); const images = pendingImages();
+    scene.setBackground('/sky.webp', '/sky.png'); scene.setTarget('/enemy.webp', '/enemy.png');
+    scene.hit(false); scene.layerBreak(); scene.frame(1050); scene.frame(1100);
+    expect(layer).toHaveBeenCalledTimes(1);
+    expect(images.map(image => image.requests)).toEqual([['/sky.webp'], ['/enemy.webp']]);
+  });
+
+  it('stops after both failures and deduplicates an identical fallback URL', () => {
+    const { scene, layer } = setup(); const images = pendingImages();
+    scene.setBackground('/sky.webp', '/sky.png');
+    for (let i = 0; i < 10; i++) images[0].onerror?.();
+    expect(images[0].requests).toEqual(['/sky.webp', '/sky.png']);
+    scene.setTarget('/enemy.webp', '/enemy.webp');
+    for (let i = 0; i < 10; i++) images[1].onerror?.();
+    expect(images[1].requests).toEqual(['/enemy.webp']);
+    scene.hit(false); scene.layerBreak(); scene.frame(1050); scene.frame(1100);
+    expect(layer).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back after an unusable decoded image or a rejected source assignment', () => {
+    const { scene } = setup(); const images = pendingImages(['/reject.webp', '/reject.png']);
+    scene.setBackground('/empty.webp', '/sky.png'); images[0].onload?.();
+    expect(images[0].requests).toEqual(['/empty.webp', '/sky.png']); images[0].loaded();
+    expect(() => scene.setTarget('/reject.webp', '/reject.png')).not.toThrow();
+    expect(images[1].requests).toEqual(['/reject.webp', '/reject.png']);
+    expect((scene as unknown as { target: unknown }).target).toBeNull();
+  });
+});
+
 describe('packet completion and independent graphics fallback', () => {
   it('contains optional image construction failures without losing canvas or input feedback', () => {
     const { scene, layer } = setup();

@@ -11,7 +11,7 @@ from playwright.sync_api import sync_playwright
 
 URL = sys.argv[1] if len(sys.argv)>1 else 'http://127.0.0.1:5184'
 BASE = sys.argv[2] if len(sys.argv)>2 else 'http://127.0.0.1:5188'
-OUT = Path('/tmp/game-typing-qa/skyway-sentinel-cycle')
+OUT = Path('/tmp/game-typing-qa/asset-cycle/stage-regression')
 OUT.mkdir(parents=True, exist_ok=True)
 SIZES = [(1920,1080),(1366,768),(1024,768),(800,600),(768,1024)]
 INIT = """localStorage.setItem('icebreaker.sound','false');
@@ -90,8 +90,8 @@ with sync_playwright() as p:
 
     for fail in ['artwork','target','canvas']:
         context=browser.new_context(viewport={'width':800,'height':600});context.add_init_script(INIT)
-        if fail=='artwork': context.route('**/stages/*.png',lambda route:route.abort())
-        elif fail=='target': context.route('**/stages/aether-sentinel.png',lambda route:route.abort())
+        if fail=='artwork': context.route('**/stages/*',lambda route:route.abort())
+        elif fail=='target': context.route('**/stages/aether-sentinel.*',lambda route:route.abort())
         else: context.add_init_script("const get=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(...args){return args[0]==='2d'?null:get.apply(this,args);};")
         page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.goto(URL);start(page);page.keyboard.type('chiri',delay=20)
         assert page.locator('#romaji .typed').inner_text()=='chiri'

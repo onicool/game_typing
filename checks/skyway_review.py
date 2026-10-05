@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 URL=sys.argv[1] if len(sys.argv)>1 else 'http://127.0.0.1:5185'
-OUT=Path('/tmp/game-typing-qa/skyway-sentinel-cycle/production-review-final');OUT.mkdir(parents=True,exist_ok=True)
+OUT=Path('/tmp/game-typing-qa/asset-cycle/production-review');OUT.mkdir(parents=True,exist_ok=True)
 with sync_playwright() as p:
  b=p.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox'])
  c=b.new_context(viewport={'width':1366,'height':768},record_video_dir=str(OUT/'video'),record_video_size={'width':1366,'height':768})
