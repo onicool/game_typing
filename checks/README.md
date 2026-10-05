@@ -241,3 +241,22 @@ formats failing. WebGL returns null in all profiles; existing Canvas2D is suffic
 Outputs stay in `/tmp/game-typing-qa/asset-cycle/`. Stable fields compare every stored
 event property except per-run session/t/dt; saved profile records remain complete.
 Local shaping is not a real network/mobile/GPU/CDN or paint-latency guarantee.
+
+
+The cosmetic interception variation is checked with:
+
+```sh
+python checks/intercept_check.py http://127.0.0.1:5186 http://127.0.0.1:5189 http://127.0.0.1:5184
+```
+
+The first two URLs are candidate and retained `410d06b` production previews;
+the third is a source-stable dev server for audit-only probes. No diagnostics
+ship. Baseline/production/probed/low-reduced contexts type the same 66 native
+events including one intentional miss and pause. Every stored field except
+per-run session/t/dt matches, and full records (canonical NaN interval sentinel)
+match after reload. Actual Scene probes verify only generation1/4 interceptions,
+no idle/miss completion and paused pixel equality. Small-window cue captures and
+production video live under `/tmp/game-typing-qa/asset-cycle/`. The amber attack
+is a visual-only progress response: it adds no collision timer/input/scoring
+judgement. New reaction contributes no screen flash/shake and motion-off remains
+stationary. Actual devices/network/other browsers/spoken readers are untested.

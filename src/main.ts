@@ -1,5 +1,5 @@
 import './style.css';
-import { Scene } from './fx/scene';
+import { Scene, isInterceptWord } from './fx/scene';
 import { Audio } from './fx/audio';
 import { Round, ROUND_MS, LAYERS_PER_FIREWALL, type RoundResult } from './game/round';
 import { DICTIONARIES } from './content/words';
@@ -246,7 +246,9 @@ function renderPanel(miss = false) {
   els.progressBar.style.width = `${(s.kanaDone / total) * 100}%`;
   const pick = round.currentPick;
   // only weak-slot words are labelled; probes stay unmarked so they remain a fair check
-  els.inputLabel.textContent = `${long ? 'LONG PRACTICE' : 'INPUT'} // ${pad(round.wordsDone + 1, 3)}${pick.role === 'weak' && pick.target ? `　◆ TARGET ${pick.target}` : ''}`;
+  const encounter = !long && isInterceptWord(round.wordsDone) ? '　◇ 迎撃（通常入力）' : '';
+  stage.classList.toggle('intercept-input', !!encounter);
+  els.inputLabel.textContent = `${long ? 'LONG PRACTICE' : 'INPUT'} // ${pad(round.wordsDone + 1, 3)}${pick.role === 'weak' && pick.target ? `　◆ TARGET ${pick.target}` : ''}${encounter}`;
   if (nextWordCached !== round.nextWord || followingWordCached !== round.followingWord) {
     nextWordCached = round.nextWord;
     followingWordCached = round.followingWord;
@@ -712,6 +714,7 @@ window.addEventListener('keydown', (e) => {
     errTimer = window.setTimeout(() => mode === 'play' && renderPanel(), 160);
   }
   const announcements: string[] = [];
+  if (out.wordDone && isInterceptWord(round.wordsDone - 1)) announcements.push('迎撃成功');
   if (out.accepted && [10, 30, 50, 100, 200].includes(round.chain)) announcements.push(`CHAIN ${round.chain}!`);
   if (out.stageChanged) announcements.push(`OVERCLOCK ${['0', 'I', 'II', 'III'][round.stage]}`);
   announce(announcements);

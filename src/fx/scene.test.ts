@@ -22,8 +22,9 @@ function setup(recordDrawCalls = true) {
   const scene = new Scene(canvas as unknown as HTMLCanvasElement);
   scene.setEffects({ shake: 0, flash: 0, motion: 1 });
   scene.frame(1000);
-  const hooks = scene as unknown as { showBreach(): void; showLayerBreak(): void; addCrack(at: number[]): void };
-  return { scene, canvas, methods, breach: vi.spyOn(hooks, 'showBreach'), layer: vi.spyOn(hooks, 'showLayerBreak'), crack: vi.spyOn(hooks, 'addCrack') };
+  const hooks = scene as unknown as { showBreach(): void; showLayerBreak(): void; showIntercept(at: number[]): void; addCrack(at: number[]): void };
+  return { scene, canvas, methods, breach: vi.spyOn(hooks, 'showBreach'), layer: vi.spyOn(hooks, 'showLayerBreak'),
+    intercept: vi.spyOn(hooks, 'showIntercept'), crack: vi.spyOn(hooks, 'addCrack') };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -95,6 +96,51 @@ describe('optional lightweight assets and bounded PNG fallback', () => {
 });
 
 describe('packet completion and independent graphics fallback', () => {
+  it('intercepts the second encounter only on its completing packet arrival', () => {
+    const { scene, intercept } = setup();
+    scene.hit(false); scene.layerBreak(); scene.frame(1050); scene.frame(1100);
+    scene.hit(false); scene.layerBreak(); scene.frame(1150);
+    expect(intercept).not.toHaveBeenCalled();
+    scene.frame(1200); scene.frame(1250);
+    expect(intercept).toHaveBeenCalledTimes(1);
+    expect((scene as unknown as { generation: number }).generation).toBe(2);
+  });
+
+  it('does not let idle time, misses or pause complete an incoming attack', () => {
+    const { scene, intercept } = setup();
+    scene.hit(false); scene.layerBreak(); scene.frame(1050); scene.frame(1100);
+    scene.setProgress(0.4); scene.miss();
+    for (let i = 0; i < 100; i++) scene.frame(1150 + i * 50);
+    scene.setActive(false); scene.frame(60100);
+    const state = scene as unknown as { generation: number; progressByGeneration: Map<number, number> };
+    expect(state.generation).toBe(1);
+    expect(state.progressByGeneration.get(1)).toBe(0.4);
+    expect(intercept).not.toHaveBeenCalled();
+  });
+
+  it('keeps every third visual attack to one reaction including a stronger fifth-word breach', () => {
+    const { scene, intercept, breach } = setup(); let now = 1000;
+    for (let i = 0; i < 6; i++) {
+      scene.hit(false); scene.layerBreak();
+      if (i === 4) scene.breach();
+      scene.frame(now += 50); scene.frame(now += 50);
+    }
+    expect(intercept).toHaveBeenCalledTimes(2); expect(breach).toHaveBeenCalledTimes(1);
+    const state = scene as unknown as { generation: number; inputGeneration: number };
+    expect([state.generation, state.inputGeneration]).toEqual([6, 6]);
+  });
+
+  it('retains stationary interception feedback without particles when motion is off', () => {
+    const { scene, intercept } = setup(); let now = 1000;
+    scene.setEffects({ shake: 0, flash: 0, motion: 0 }); scene.setLowGraphics(true);
+    for (let i = 0; i < 5; i++) {
+      scene.setProgress(i / 5); scene.hit(false); scene.layerBreak();
+      scene.frame(now += 16);
+    }
+    expect(intercept).toHaveBeenCalledTimes(2);
+    expect(intercept.mock.calls[0][0]).toEqual(intercept.mock.calls[1][0]);
+    expect((scene as unknown as { sparks: unknown[] }).sparks).toHaveLength(0);
+  });
   it('contains optional image construction failures without losing canvas or input feedback', () => {
     const { scene, layer } = setup();
     vi.stubGlobal('Image', class { constructor() { throw new Error('Synthetic image construction failure'); } });

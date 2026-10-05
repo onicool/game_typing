@@ -18,6 +18,10 @@ const CYAN = '101,245,237';
 const PINK = '255,88,200';
 const RED = '255,80,100';
 const WHITE = '235,255,250';
+const AMBER = '255,201,106';
+
+/** A visual encounter variation; never changes input, deadlines or scoring. */
+export const isInterceptWord = (index: number) => index % 3 === 1;
 
 interface Packet { from: P2; to: P2; t: number; dur: number; critical: boolean; generation: number; completion?: 'layer' | 'breach' }
 interface Opening { pts: P2[]; life: number; max: number }
@@ -52,6 +56,7 @@ export class Scene {
   private lowGraphics = false;
   private active = true;
   private arenaBottom = 650;
+  private arenaScale = 1;
   private background: HTMLImageElement | null = null;
   private target: HTMLImageElement | null = null;
   private thrust = 0;
@@ -225,14 +230,34 @@ export class Scene {
 
   /** A word was completed: one firewall layer breaks. */
   layerBreak() {
-    const last = this.packets.at(-1);
-    if (last && !last.completion) { last.completion = 'layer'; this.inputGeneration++; }
+    this.completePacket('layer');
   }
 
   /** Attach the completion to its final packet, without delaying input/scoring. */
   breach() {
+    this.completePacket('breach');
+  }
+
+  private completePacket(kind: 'layer' | 'breach') {
     const last = this.packets.at(-1);
-    if (last) { if (!last.completion) this.inputGeneration++; last.completion = 'breach'; }
+    if (!last || (last.completion && kind === 'layer')) return;
+    if (!last.completion) this.inputGeneration++;
+    last.completion = kind;
+    this.progressByGeneration.set(last.generation, 1);
+    if (isInterceptWord(last.generation)) this.attackPoint(1, last.to);
+  }
+
+  private attackPoint(progress: number, out: P2) {
+    const p = this.effects.motion === 0 ? 0 : unit(progress);
+    out[0] = CX + 138 + p * 90;
+    out[1] = CY - 76 + p * 110;
+  }
+
+  private showIntercept(at: P2) {
+    this.rings.push({ r: 18, life: 0, max: 0.38, color: AMBER, grow: 90, at: [...at] });
+    if (this.effects.motion > 0) for (let i = 0; i < (this.lowGraphics ? 2 : 7); i++) {
+      this.spark(at[0], at[1], rand(120, 360), AMBER, 0.28);
+    }
   }
 
   private showLayerBreak() {
@@ -312,6 +337,7 @@ export class Scene {
     const [sx, sy] = this.shakeOffset;
     ctx.save();
     const arenaScale = Math.min(1, Math.max(0.25, (this.arenaBottom - 150) / 490));
+    this.arenaScale = arenaScale;
     ctx.translate(CX, 140 + (this.arenaBottom - 140) * 0.48);
     ctx.scale(arenaScale, arenaScale);
     ctx.translate(-CX, -CY);
@@ -322,6 +348,7 @@ export class Scene {
     this.drawTunnel(worldDt, tunnelSpeed);
     this.drawCube();
     this.drawCracks();
+    this.drawAttack();
     this.updateOpenings(dt);
     // effects that should not shake as much
     this.drawPackets();
@@ -497,6 +524,32 @@ export class Scene {
     ctx.lineWidth = 1;
   }
 
+  private drawAttack() {
+    if (!isInterceptWord(this.generation)) return;
+    const ctx = this.ctx;
+    this.attackPoint(this.approach, this.projectA);
+    const [x, y] = this.projectA;
+    const r = Math.max(14 + (this.effects.motion === 0 ? 0 : this.approach * 12),
+      7 / Math.max(0.01, this.viewScale * this.arenaScale));
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = `rgba(${AMBER},0.35)`;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x - r * 2.1, y - r * 2.6);
+    ctx.lineTo(x - r * 0.6, y - r * 0.8); ctx.stroke();
+    ctx.strokeStyle = `rgba(${AMBER},0.9)`;
+    ctx.fillStyle = `rgba(${AMBER},0.24)`;
+    ctx.lineWidth = 2;
+    // A constant amber diamond + two aiming brackets telegraph the attack.
+    // Only accepted-key progress approaches it; waiting/misses cannot collide.
+    ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y);
+    ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+    for (const side of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(x + side * (r + 8), y - r);
+      ctx.lineTo(x + side * (r + 16), y); ctx.lineTo(x + side * (r + 8), y + r); ctx.stroke();
+    }
+    ctx.lineWidth = 1;
+  }
+
   private addCrack(at: P2) {
     const R = this.cubeRadius;
     let x = (at[0] - CX) / R;
@@ -529,6 +582,10 @@ export class Scene {
       // preceding wall's completion; stale packets cannot crack a new wall.
       if (p.generation > this.generation) return true;
       if (p.generation < this.generation) return false;
+      if (p.completion && isInterceptWord(p.generation)) {
+        this.attackPoint(1, p.to);
+        this.showIntercept(p.to);
+      }
       this.kick = Math.max(this.kick, p.critical ? 0.45 : 0.2);
       this.addCrack(p.to);
       if (this.effects.motion > 0) {

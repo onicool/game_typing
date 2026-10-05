@@ -276,3 +276,4 @@ kbd { border: 1px solid #2c434e; padding: 3px 7px; margin-right: 6px; color: #9a
 .compact-input .ice-index { display: none; }
 
 .enemy-info h2 { font-size: 18px; letter-spacing: 1px; }
+.intercept-input .input-label { color: #ffc96a; }
