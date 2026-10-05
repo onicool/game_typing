@@ -1,12 +1,11 @@
 /**
- * Canvas2D pseudo-3D cyberspace: hexagonal tunnel, a wireframe "firewall"
- * cube that cracks with every packet, and shards when it breaks.
+ * Canvas2D SKYWAY: a flight corridor with approaching energy barriers.
+ * Accepted keys drive travel and impact; word completion breaks a barrier.
  *
  * All coordinates are in stage space (1920x1080). Nothing here ever draws on
  * the input panel area's text: the panel is a DOM element above the canvas.
  */
 
-type V3 = [number, number, number];
 type P2 = [number, number];
 
 const W = 1920;
@@ -29,17 +28,6 @@ interface FloatText { x: number; y: number; text: string; sub: string; life: num
 interface Ring { r: number; life: number; max: number; color: string; grow: number; at?: P2 }
 interface Drifter { x: number; y: number; z: number; size: number; rx: number; ry: number; color: string }
 
-const CUBE: V3[] = [
-  [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
-  [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1],
-];
-const EDGES: [number, number][] = [
-  [0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7],
-];
-const FACES: number[][] = [
-  [0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [1, 2, 6, 5], [0, 3, 7, 4],
-];
-
 const unit = (v: number) => Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0;
 const points = (n: number): P2[] => Array.from({ length: n }, () => [0, 0]);
 const EDGE_WIDTHS = [9, 4, 1.6];
@@ -57,34 +45,24 @@ function retain<T>(items: T[], keep: (item: T) => boolean) {
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
-function hull(points: P2[], sorted: P2[], out: P2[]) {
-  for (let i = 0; i < points.length; i++) sorted[i] = points[i];
-  sorted.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cross = (o: P2, a: P2, b: P2) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  out.length = 0;
-  for (const q of sorted) {
-    while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], q) <= 0) out.pop();
-    out.push(q);
-  }
-  const upperStart = out.length + 1;
-  for (let i = sorted.length - 2; i >= 0; i--) {
-    const q = sorted[i];
-    while (out.length >= upperStart && cross(out[out.length - 2], out[out.length - 1], q) <= 0) out.pop();
-    out.push(q);
-  }
-  out.pop();
-}
-
 export class Scene {
   private ctx!: CanvasRenderingContext2D;
   private available = false;
   private viewScale = 1;
   private lowGraphics = false;
+  private active = true;
+  private arenaBottom = 650;
+  private background: HTMLImageElement | null = null;
+  private thrust = 0;
+  private approach = 0;
+  private progressByGeneration = new Map<number, number>();
+  private skyGradient: CanvasGradient | null = null;
   private last = 0;
   private time = 0; // world time, frozen during hit-stop
   private motionTime = 0; // separate rotation clock; cracks age even with motion disabled
   private hitStop = 0;
   private shake = 0;
+  private shakeOffset: P2 = [0, 0];
   private flash = 0;
   private missFlash = 0;
   private tunnelZ = 0;
@@ -106,16 +84,9 @@ export class Scene {
   private drifters: Drifter[] = [];
   private cubeRadius = 230;
   private hullPts: P2[] = [];
-  private hullSorted: P2[] = [];
   private cubePts = points(8);
-  private cubeRot: V3[] = Array.from({ length: 8 }, () => [0, 0, 0]);
-  private driftPts = points(8);
-  private rotated: V3 = [0, 0, 0];
   private projectA: P2 = [0, 0];
   private projectB: P2 = [0, 0];
-  private tunnelPts = Array.from({ length: 11 }, () => points(6));
-  private tunnelDepths: number[] = Array(11).fill(0);
-  private faceOrder = FACES.map((_, i) => ({ i, z: 0 }));
   private coreGradients = new Map<number, CanvasGradient>();
 
   constructor(private canvas: HTMLCanvasElement) {
@@ -127,6 +98,18 @@ export class Scene {
     canvas.addEventListener('contextrestored', () => this.restoreContext());
     for (let i = 0; i < 14; i++) this.drifters.push(this.newDrifter(rand(600, 4200)));
   }
+
+  /** Optional artwork: unavailable/loading images retain the procedural sky. */
+  setBackground(url: string) {
+    const image = new Image();
+    image.onload = () => { this.background = image; };
+    image.onerror = () => { /* Keep the usable local fallback. */ };
+    image.src = url;
+  }
+
+  setActive(active: boolean) { this.active = active; }
+  setArenaBottom(bottom: number) { this.arenaBottom = Math.max(220, Math.min(680, bottom)); }
+  setProgress(progress: number) { this.progressByGeneration.set(this.inputGeneration, unit(progress)); }
 
   private setAvailable(available: boolean) {
     this.available = available;
@@ -152,6 +135,7 @@ export class Scene {
     this.canvas.height = Math.max(1, Math.round(H * pixelScale));
     this.ctx.setTransform(this.canvas.width / W, 0, 0, this.canvas.height / H, 0, 0);
     this.coreGradients.clear();
+    this.skyGradient = null;
   }
 
   setLowGraphics(low: boolean) {
@@ -177,6 +161,9 @@ export class Scene {
     this.inputGeneration = 0;
     this.last = this.time = this.motionTime = this.tunnelZ = 0;
     this.spawnT = 1;
+    this.thrust = this.approach = 0;
+    this.shakeOffset[0] = this.shakeOffset[1] = 0;
+    this.progressByGeneration.clear();
     this.cubeRadius = 230;
     this.hullPts.length = 0;
   }
@@ -184,11 +171,12 @@ export class Scene {
   /** Accepted keystroke: fire a packet at the firewall. */
   hit(critical: boolean, gainMs = 0) {
     if (!this.available) return;
+    this.thrust = Math.min(1, this.thrust + (critical ? 0.24 : 0.14));
     const n = critical && !this.lowGraphics && this.effects.motion > 0 ? 3 : 1;
     for (let i = 0; i < n; i++) {
       const from: P2 = [960 + rand(-160, 160), 750];
       const a = rand(0, Math.PI * 2);
-      const r = Math.sqrt(Math.random()) * this.cubeRadius * 0.6;
+      const r = Math.sqrt(Math.random()) * Math.min(this.cubeRadius * 0.4, 90);
       const to: P2 = [CX + Math.cos(a) * r, CY + Math.sin(a) * r];
       this.packets.push({ from, to, t: 0, dur: critical ? 0.07 : 0.085, critical, generation: this.inputGeneration });
       // Visible on the first frame, before the packet reaches the firewall.
@@ -214,21 +202,27 @@ export class Scene {
   /** A word was completed: one firewall layer breaks. */
   layerBreak() {
     const last = this.packets.at(-1);
-    if (last) last.completion = 'layer';
+    if (last && !last.completion) { last.completion = 'layer'; this.inputGeneration++; }
   }
 
   /** Attach the completion to its final packet, without delaying input/scoring. */
   breach() {
     const last = this.packets.at(-1);
-    if (last) { last.completion = 'breach'; this.inputGeneration++; }
+    if (last) { if (!last.completion) this.inputGeneration++; last.completion = 'breach'; }
   }
 
   private showLayerBreak() {
+    this.progressByGeneration.delete(this.generation);
+    this.generation++;
     this.hitStop = 0.05;
     this.kick = 1;
     this.shake = Math.max(this.shake, 9);
     this.rings.push({ r: this.cubeRadius * 0.8, life: 0, max: 0.45, color: CYAN, grow: 320 });
-    this.burstShards(this.lowGraphics ? 3 : 8, 0.6);
+    this.speed = 1600;
+    this.approach = 0;
+    this.spawnT = 0;
+    this.cracks.length = 0;
+    this.burstShards(this.lowGraphics ? 3 : 18, 0.9);
     if (this.effects.motion > 0) for (let i = 0; i < (this.lowGraphics ? 4 : 12); i++) this.spark(CX + rand(-60, 60), CY + rand(-60, 60), rand(300, 900), CYAN, 0.4);
   }
 
@@ -236,6 +230,7 @@ export class Scene {
   private showBreach() {
     // User preference: A's shattering feedback, with the fixed packet-arrival
     // timing and existing low-load/reduced-motion protections preserved.
+    this.progressByGeneration.delete(this.generation);
     this.generation++;
     this.hitStop = 0.06;
     this.flash = 1;
@@ -247,6 +242,7 @@ export class Scene {
     if (this.effects.motion > 0) for (let i = 0; i < (this.lowGraphics ? 4 : 22); i++) this.spark(CX + rand(-40, 40), CY + rand(-40, 40), rand(700, 1600), Math.random() < 0.5 ? CYAN : PINK, 0.6);
     this.cracks.length = 0;
     this.damage = 0;
+    this.approach = 0;
     this.spawnT = this.effects.motion === 0 ? 1 : 0;
   }
 
@@ -261,7 +257,7 @@ export class Scene {
   }
 
   private drawFrame(now: number) {
-    const dt = this.last ? Math.min(0.05, (now - this.last) / 1000) : 0.016;
+    const dt = this.active ? (this.last ? Math.min(0.05, (now - this.last) / 1000) : 0.016) : 0;
     this.last = now;
     const worldDt = this.hitStop > 0 ? dt * (1 - this.effects.motion) : dt;
     this.hitStop = Math.max(0, this.hitStop - dt);
@@ -269,24 +265,32 @@ export class Scene {
     this.motionTime += worldDt * this.effects.motion;
 
     // motion
-    const cruise = 60 + this.stage * 25;
+    const cruise = 180 + this.thrust * 1000 + this.stage * 25;
     this.speed += (cruise - this.speed) * Math.min(1, dt * 2.2);
     const tunnelSpeed = this.speed * this.effects.motion;
     this.tunnelZ = (this.tunnelZ + tunnelSpeed * worldDt) % 420;
+    this.thrust = Math.max(0, this.thrust - dt * 1.3);
     this.shake *= Math.pow(0.0008, dt);
     this.flash = Math.max(0, this.flash - dt * 2.8);
     this.missFlash = Math.max(0, this.missFlash - dt * 6);
     this.kick = Math.max(0, this.kick - dt * 7);
     this.spawnT = Math.min(1, this.spawnT + dt * 2.2);
+    this.approach += ((this.progressByGeneration.get(this.generation) ?? 0) - this.approach) * Math.min(1, dt * 8);
 
     const ctx = this.ctx;
     ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = '#03070b';
-    ctx.fillRect(0, 0, W, H);
+    this.drawSky();
 
-    const sx = (Math.random() - 0.5) * this.shake * this.effects.shake;
-    const sy = (Math.random() - 0.5) * this.shake * this.effects.shake;
+    if (this.active) {
+      this.shakeOffset[0] = (Math.random() - 0.5) * this.shake * this.effects.shake;
+      this.shakeOffset[1] = (Math.random() - 0.5) * this.shake * this.effects.shake;
+    }
+    const [sx, sy] = this.shakeOffset;
     ctx.save();
+    const arenaScale = Math.min(1, Math.max(0.25, (this.arenaBottom - 150) / 490));
+    ctx.translate(CX, 140 + (this.arenaBottom - 140) * 0.48);
+    ctx.scale(arenaScale, arenaScale);
+    ctx.translate(-CX, -CY);
     ctx.translate(sx, sy);
 
     // Resolve packet arrival before drawing the new wall and its opening.
@@ -295,21 +299,43 @@ export class Scene {
     this.drawCube();
     this.drawCracks();
     this.updateOpenings(dt);
-    ctx.restore();
-
     // effects that should not shake as much
     this.drawPackets();
     this.updateSparks(dt);
     this.updateShards(dt);
     this.updateRings(dt);
     this.updateTexts(dt);
+    ctx.restore();
 
     if (this.flash > 0 && this.effects.flash > 0) {
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = `rgba(${WHITE},${this.flash * this.effects.flash * 0.16})`;
-      ctx.fillRect(0, 0, W, H);
+      // Confine a breakthrough's light to the scenery, never the input panel.
+      ctx.fillRect(0, 130, W, Math.max(0, this.arenaBottom - 130));
     }
     ctx.globalCompositeOperation = 'source-over';
+  }
+
+  private drawSky() {
+    const ctx = this.ctx;
+    if (!this.skyGradient) {
+      this.skyGradient = ctx.createRadialGradient(1100, 240, 30, 960, 400, 1300);
+      this.skyGradient.addColorStop(0, '#438db2');
+      this.skyGradient.addColorStop(0.45, '#17364f');
+      this.skyGradient.addColorStop(1, '#070e20');
+    }
+    ctx.fillStyle = this.skyGradient;
+    ctx.fillRect(0, 0, W, H);
+    if (this.background) {
+      const image = this.background;
+      const zoom = 1 + this.thrust * 0.018 * this.effects.motion;
+      const scale = Math.max(W / image.naturalWidth, H / image.naturalHeight) * zoom;
+      const w = image.naturalWidth * scale, h = image.naturalHeight * scale;
+      ctx.drawImage(image, (W - w) / 2, (H - h) / 2, w, h);
+    }
+    // The scenery remains legible, while the opaque DOM input owns its contrast.
+    ctx.fillStyle = '#07152655';
+    ctx.fillRect(0, 0, W, H);
   }
 
   // ---- tunnel -------------------------------------------------------------
@@ -320,83 +346,42 @@ export class Scene {
     return out;
   }
 
-  private drawTunnel(dt: number, speed: number) {
+  private drawTunnel(_dt: number, _speed: number) {
     const ctx = this.ctx;
     ctx.globalCompositeOperation = 'lighter';
-    const R = 1250;
-    const rings = this.tunnelPts;
-    const zs = this.tunnelDepths;
-    let count = 0;
-    for (let i = 0; i < (this.lowGraphics ? 7 : 11); i++) {
-      const z = 260 + i * 420 - this.tunnelZ;
-      if (z < 120) continue;
-      zs[count] = z;
-      const pts = rings[count++];
-      for (let k = 0; k < 6; k++) {
-        const a = (Math.PI / 3) * k + Math.PI / 6;
-        this.project(Math.cos(a) * R * 1.35, Math.sin(a) * R, z, pts[k]);
+    // Flight beacons have no key labels, lanes, or timing targets.
+    for (let i = 0; i < (this.lowGraphics ? 6 : 11); i++) {
+      const z = 300 + i * 420 - this.tunnelZ;
+      if (z < 150) continue;
+      const alpha = Math.min(0.7, 0.8 - z / 6500);
+      for (const side of [-1, 1]) {
+        const a = this.project(side * 760, 430, z, this.projectA);
+        const b = this.project(side * 760, 200, z, this.projectB);
+        ctx.strokeStyle = `rgba(${CYAN},${alpha})`;
+        ctx.lineWidth = this.lowGraphics ? 1 : 3;
+        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
       }
     }
-    const oc = this.stage / 3;
-    for (let i = 0; i < count; i++) {
-      const pts = rings[i];
-      const a = Math.max(0, 0.38 - zs[i] / 12000) * (1 + oc * 0.6);
-      ctx.strokeStyle = `rgba(${CYAN},${a * 0.55})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      pts.forEach((p, k) => (k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
-      ctx.closePath();
-      ctx.stroke();
+    for (const side of [-1, 1]) {
+      const a = this.project(side * 760, 430, 220, this.projectA);
+      const b = this.project(side * 760, 430, 5000, this.projectB);
+      ctx.strokeStyle = `rgba(${CYAN},0.18)`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
     }
-    // longitudinal edges
-    for (let k = 0; k < 6; k++) {
-      ctx.strokeStyle = `rgba(${CYAN},${0.12 + oc * 0.08})`;
-      ctx.beginPath();
-      const a = (Math.PI / 3) * k + Math.PI / 6;
-      const near = this.project(Math.cos(a) * R * 1.35, Math.sin(a) * R, 120, this.projectA);
-      const far = this.project(Math.cos(a) * R * 1.35, Math.sin(a) * R, 5000, this.projectB);
-      ctx.moveTo(near[0], near[1]);
-      ctx.lineTo(far[0], far[1]);
-      ctx.stroke();
-    }
-    // floor grid lines converging
-    ctx.strokeStyle = `rgba(${CYAN},0.06)`;
-    for (let i = -8; i <= 8 && !this.lowGraphics; i++) {
-      const a = this.project(i * 260, 900, 140, this.projectA);
-      const b = this.project(i * 260, 900, 5000, this.projectB);
-      ctx.beginPath();
-      ctx.moveTo(a[0], a[1]);
-      ctx.lineTo(b[0], b[1]);
-      ctx.stroke();
-    }
-    // drifting wire cubes
-    if (this.lowGraphics) return;
-    for (const d of this.drifters) {
-      d.z -= speed * dt * 0.9;
-      d.rx += dt * 0.2 * this.effects.motion;
-      d.ry += dt * 0.3 * this.effects.motion;
-      if (d.z < 150) Object.assign(d, this.newDrifter(rand(3800, 4600)));
-      const [px, py] = this.project(d.x, d.y, d.z, this.projectA);
-      // keep clear of the HUD columns and the top bar
-      const side = Math.max(0, Math.abs(px - 960) - 420) / 140;
-      const top = Math.max(0, 170 - py) / 80;
-      const hudFade = Math.max(0, 1 - Math.max(side, top));
-      const alpha = Math.min(1, (4600 - d.z) / 1200) * Math.min(1, (d.z - 150) / 300) * 0.4 * hudFade;
-      if (alpha <= 0.01) continue;
-      const pts = this.driftPts;
-      for (let i = 0; i < CUBE.length; i++) {
-        const [x, y, z] = CUBE[i];
-        this.rotate(x * d.size, y * d.size, z * d.size, d.rx, d.ry, this.rotated);
-        this.project(d.x + this.rotated[0], d.y + this.rotated[1], d.z + this.rotated[2], pts[i]);
+    // Short radial streaks grow with accepted-key acceleration.
+    if (this.effects.motion > 0 && this.thrust > 0.05) {
+      for (let i = 0; i < (this.lowGraphics ? 4 : 18); i++) {
+        const a = i * Math.PI * 2 / 18;
+        const r = 360 + ((this.motionTime * 420 + i * 97) % 500);
+        const length = 25 + this.thrust * 90;
+        ctx.strokeStyle = `rgba(220,243,255,${this.thrust * 0.45})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(CX + Math.cos(a) * r, CY + Math.sin(a) * r * 0.6);
+        ctx.lineTo(CX + Math.cos(a) * (r + length), CY + Math.sin(a) * (r + length) * 0.6); ctx.stroke();
       }
-      ctx.strokeStyle = `rgba(${d.color},${alpha})`;
-      ctx.beginPath();
-      for (const [a, b] of EDGES) {
-        ctx.moveTo(pts[a][0], pts[a][1]);
-        ctx.lineTo(pts[b][0], pts[b][1]);
-      }
-      ctx.stroke();
     }
+    ctx.lineWidth = 1;
   }
 
   private newDrifter(z: number): Drifter {
@@ -408,98 +393,49 @@ export class Scene {
     return { x, y, z, size: rand(50, 110), rx: rand(0, 6), ry: rand(0, 6), color: Math.random() < 0.3 ? PINK : CYAN };
   }
 
-  private rotate(x: number, y: number, z: number, ax: number, ay: number, out: V3) {
-    const cy = Math.cos(ay), sy = Math.sin(ay);
-    const x1 = x * cy + z * sy;
-    const z1 = -x * sy + z * cy;
-    const cx = Math.cos(ax), sx = Math.sin(ax);
-    out[0] = x1;
-    out[1] = y * cx - z1 * sx;
-    out[2] = y * sx + z1 * cx;
-  }
-
   // ---- firewall cube -------------------------------------------------------
 
   private drawCube() {
     const ctx = this.ctx;
-    const t = this.motionTime;
-    // near the body-diagonal view the cube reads as a hexagon (like the concept art)
-    const ay = Math.PI / 4 + Math.sin(t * 0.35) * 0.22 + t * 0.05;
-    const ax = 0.6155 + Math.sin(t * 0.27) * 0.08;
-    const approach = 1 - Math.pow(1 - this.spawnT, 3) * this.effects.motion;
-    const scale = (0.25 + 0.75 * approach) * (1 - this.kick * this.effects.motion * 0.06);
-    const size = 132 * scale;
-    this.cubeRadius = 230 * scale;
-
-    const rot = this.cubeRot;
+    // A faceted energy barrier approaches with actual word progress. It cannot
+    // collide, expire, or impose an extra music/animation timing judgement.
+    const approach = this.effects.motion === 0 ? 1 : Math.min(1, this.spawnT * 1.7);
+    const scale = this.effects.motion === 0 ? 0.8
+      : (0.44 + this.approach * 0.42 + approach * 0.14) * (1 - this.kick * this.effects.motion * 0.04);
+    const R = this.cubeRadius = 250 * scale;
     const pts = this.cubePts;
-    for (let i = 0; i < CUBE.length; i++) {
-      const v = CUBE[i];
-      this.rotate(v[0] * size, v[1] * size, v[2] * size, ax, ay, rot[i]);
-      this.project(rot[i][0], rot[i][1], 900 + rot[i][2], pts[i]);
+    this.hullPts.length = 0;
+    for (let i = 0; i < 6; i++) {
+      const a = Math.PI / 3 * i + Math.PI / 6;
+      pts[i][0] = CX + Math.cos(a) * R * 1.18;
+      pts[i][1] = CY + Math.sin(a) * R * 0.9;
+      this.hullPts.push(pts[i]);
     }
-    hull(pts, this.hullSorted, this.hullPts);
-
-    // faces, back to front; retain the ordering buffer across frames
-    const order = this.faceOrder;
-    for (const face of order) {
-      const f = FACES[face.i];
-      face.z = (rot[f[0]][2] + rot[f[1]][2] + rot[f[2]][2] + rot[f[3]][2]) / 4;
-    }
-    order.sort((a, b) => b.z - a.z);
     ctx.globalCompositeOperation = 'source-over';
-    for (const { i, z } of order) {
-      const f = FACES[i];
-      const front = z < 0;
-      // Average the old gradient stops for a similar translucent face tint.
-      ctx.fillStyle = `rgba(${Math.round(26 + 30 * this.damage)},40,${Math.round(60 + 10 * this.damage)},${front ? 0.425 + this.damage * 0.075 : 0.215})`;
-      ctx.beginPath();
-      f.forEach((k, j) => (j ? ctx.lineTo(pts[k][0], pts[k][1]) : ctx.moveTo(pts[k][0], pts[k][1])));
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // glowing edges
+    ctx.beginPath();
+    this.hullPts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+    ctx.closePath(); ctx.fillStyle = `rgba(${10 + Math.round(this.damage * 25)},35,66,0.66)`; ctx.fill();
     ctx.globalCompositeOperation = 'lighter';
-    const flicker = this.missFlash > 0.2 ? this.effects.flash : 0;
-    const col = flicker === 1 ? RED : flicker === 0 ? CYAN
-      : `${Math.round(101 + 154 * flicker)},${Math.round(245 - 165 * flicker)},${Math.round(237 - 137 * flicker)}`;
-    const glow = 0.18 + this.stage * 0.06 + this.kick * 0.3;
-    for (let i = this.lowGraphics ? EDGE_WIDTHS.length - 1 : 0; i < EDGE_WIDTHS.length; i++) {
-      const a = i === 0 ? glow * 0.5 : i === 1 ? glow : 0.95;
-      ctx.lineWidth = EDGE_WIDTHS[i];
-      ctx.strokeStyle = `rgba(${col},${a * approach})`;
-      ctx.beginPath();
-      for (const [a1, b1] of EDGES) {
-        ctx.moveTo(pts[a1][0], pts[a1][1]);
-        ctx.lineTo(pts[b1][0], pts[b1][1]);
-      }
-      ctx.stroke();
+    const col = this.missFlash > 0.2 && this.effects.flash > 0 ? RED : CYAN;
+    for (let i = this.lowGraphics ? 2 : 0; i < 3; i++) {
+      ctx.strokeStyle = `rgba(${col},${i === 2 ? 0.95 : 0.18})`;
+      ctx.lineWidth = EDGE_WIDTHS[i]; ctx.stroke();
     }
-
-    // damage: pink core glow grows as the firewall weakens
-    if (this.damage > 0) {
-      const radius = Math.max(8, Math.round(this.cubeRadius / 8) * 8);
-      let rg = this.coreGradients.get(radius);
-      if (!rg) {
-        // Cache in stage space, independent of the current shake offset.
-        ctx.save();
-        ctx.setTransform(this.canvas.width / W, 0, 0, this.canvas.height / H, 0, 0);
-        rg = ctx.createRadialGradient(CX + 40, CY + 40, 10, CX + 40, CY + 40, radius);
-        ctx.restore();
-        rg.addColorStop(0, `rgba(${PINK},0.25)`);
-        rg.addColorStop(1, `rgba(${PINK},0)`);
-        this.coreGradients.set(radius, rg);
-      }
-      ctx.save();
-      ctx.globalAlpha = this.damage;
-      ctx.fillStyle = rg;
-      ctx.beginPath();
-      this.hullPts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
+    // Six plates converge on a luminous impact core, rather than a wire cube.
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = `rgba(${CYAN},0.38)`;
+    for (const p of this.hullPts) {
+      ctx.beginPath(); ctx.moveTo(p[0], p[1]);
+      ctx.lineTo(CX + (p[0] - CX) * 0.25, CY + (p[1] - CY) * 0.25); ctx.stroke();
     }
+    ctx.beginPath();
+    for (let i = 0; i <= 6; i++) {
+      const a = Math.PI / 3 * i + Math.PI / 6;
+      const x = CX + Math.cos(a) * R * 0.27, y = CY + Math.sin(a) * R * 0.27;
+      if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    }
+    ctx.fillStyle = `rgba(${this.approach > 0.65 ? PINK : CYAN},${0.18 + this.kick * 0.2})`;
+    ctx.fill(); ctx.stroke();
     ctx.lineWidth = 1;
   }
 
@@ -551,6 +487,7 @@ export class Scene {
   // ---- particles -----------------------------------------------------------
 
   private updatePackets(dt: number) {
+    if (!this.active) return;
     retain(this.packets, (p) => {
       p.t += dt;
       if (p.t < p.dur && this.effects.motion > 0) return true;

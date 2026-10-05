@@ -33,6 +33,7 @@ const store = createSettingsStore(issue => {
 const stage = $('stage');
 const dialogFocus = new DialogFocus(stage);
 const scene = new Scene($<HTMLCanvasElement>('scene'));
+scene.setBackground(`${import.meta.env.BASE_URL}stages/skyway.png`);
 const audio = new Audio();
 
 type Mode = 'title' | 'play' | 'result' | 'report';
@@ -72,6 +73,7 @@ function fit() {
   stage.classList.toggle('tight-input', s < 0.5);
   if (round?.word.segments) renderPanel();
   scene.resize(s);
+  scene.setArenaBottom($('input-panel').offsetTop - 65);
 }
 window.addEventListener('resize', fit);
 fit();
@@ -99,7 +101,6 @@ const els = {
   volume: $<HTMLInputElement>('sound-volume'),
 };
 
-const SECTORS = ['CORPORATE MESH / OUTER RING', 'CORPORATE MESH / INNER RING', 'AI INTERIOR / CORE ACCESS'];
 const OC_NAMES = ['0 / IDLE', 'I / SYNC', 'II / RESONANCE', 'III / FULL SPECTRUM'];
 const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
 const pad = (n: number, w = 2) => String(n).padStart(w, '0');
@@ -252,6 +253,8 @@ function renderPanel(miss = false) {
     $('following-guide').textContent = isJp ? new TypingSession(round.followingWord.reading, { prefs }).guide : '';
   }
   els.readyHelp.classList.toggle('hidden', round.started || long);
+  scene.setProgress(s.kanaDone / total);
+  scene.setArenaBottom(els.word.closest<HTMLElement>('#input-panel')!.offsetTop - 65);
 }
 
 function renderHud() {
@@ -271,11 +274,10 @@ function renderHud() {
   els.layerIndex.textContent = `◆ LAYER ${pad(round.layer + 1)} / ${pad(LAYERS_PER_FIREWALL)}`;
   els.iceKind.textContent = `標準防壁 / 第 ${pad(round.layer + 1)} 層`;
   els.iceId.textContent = `[ ICE // FW-${pad(round.firewalls + 1, 3)} ]`;
-  const sector = Math.min(3, 1 + Math.floor(round.firewalls / 2));
-  els.sectorNo.textContent = String(round.firewalls + 1);
-  els.sectorSub.textContent = SECTORS[sector - 1];
+  els.sectorNo.textContent = '01';
+  els.sectorSub.textContent = 'SKYWAY / 空中回廊';
   els.depth.textContent = (round.totalKana() * 12 + round.firewalls * 400).toLocaleString();
-  els.depthSub.textContent = `▾ ${['OUTER NETWORK', 'INNER NETWORK', 'AI CORE'][sector - 1]}`;
+  els.depthSub.textContent = `▾ ROUTE ${pad(round.firewalls + 1, 3)}`;
   [...els.layerPips.children].forEach((el, i) => el.classList.toggle('broken', i < round!.layer));
   els.layerPips.setAttribute('aria-label', `この防壁の突破済み層 ${round.layer} / ${LAYERS_PER_FIREWALL}`);
   scene.setDamage(1 - integ);
@@ -730,6 +732,7 @@ function loop(now: number) {
     renderClock(now);
     if (round.finished) endRound();
   }
+  scene.setActive(mode === 'play' && !!round?.started && !round.paused && !round.finished);
   scene.frame(now);
   requestAnimationFrame(loop);
 }

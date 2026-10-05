@@ -172,3 +172,32 @@ to the source object's identity; it now checks identity against the actually
 selected word. UI regressions caught and resolved the long-helper/footer overlap
 and readiness visibility. Physical input/paint, OS IME and other browsers remain
 unverified; the captures are preference evidence, not a controlled efficacy study.
+
+
+SKYWAY stage checks use the local Vite dev server, because the audit-only probe
+imports the exact app Scene module (including any Vite HMR query) and inspects
+existing state. No debug hooks ship in production. Serve the retained `e026e8b`
+production build independently as the second URL:
+
+```sh
+npm run dev -- --host 127.0.0.1 --port 5184 --strictPort
+python checks/skyway_check.py http://127.0.0.1:5184 http://127.0.0.1:5188
+```
+
+Results, actual PNGs and a raw silent browser video go to
+`/tmp/game-typing-qa/skyway-cycle/`. Recording requires Playwright's ffmpeg
+executable. In this environment the installed `/usr/bin/ffmpeg` was reused via
+a task-local `playwright/ffmpeg-1011/ffmpeg-linux` link and that directory was
+passed through `PLAYWRIGHT_BROWSERS_PATH`; no download/dependency was added.
+The existing generated PNG is served locally from `public/stages/skyway.png`;
+loading failure keeps a procedural sky, and Canvas loss keeps typing usable.
+Checks cover accepted-key approach, six completions/six barriers/one stronger
+breach, fixed input geometry, paused scene/pixel equality, motion-off/low-load
+completion and both asset/Canvas fallback. Long/queue and keyboard/dialog/audio
+checks were rerun with separate output directories to preserve earlier evidence.
+The renderer stress fixture disables drawing-argument recording only for the
+300-completion stress test, retaining all state/cap assertions and timeout.
+The raw video is an actual browser recording with no scene compositing. Review
+MP4 conversion uses installed ffmpeg. Physical keyboard/display/GPU latency,
+sustained devices, cold start, listening, spoken readers and other browsers
+remain unmeasured.

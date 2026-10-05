@@ -126,12 +126,12 @@ kbd { border: 1px solid #2c434e; padding: 3px 7px; margin-right: 6px; color: #9a
 .compact-input .depth { display: none; }
 .compact-input .enemy-info { top: 190px; }
 .compact-input .enemy-log { display: none; }
-.compact-input #scene { transform: translateY(-180px) scale(0.75); transform-origin: 975px 435px; }
+.compact-input #scene { transform: none; }
 .tight-input .overclock { margin-top: 12px; }
 .tight-input .chain .number { font-size: 70px; margin-top: 4px; }
 .tight-input .stages { margin-top: 6px; margin-bottom: 6px; }
 .tight-input .oc-name, .tight-input .ice-index { display: none; }
-.tight-input #scene { transform: translateY(-210px) scale(0.6); }
+.tight-input #scene { transform: none; }
 .scene-unavailable #scene { visibility: hidden; }
 .compact-input .chain { top: auto; bottom: calc(96px + 360px * var(--input-boost)); }
 .tight-input .overclock, .tight-input .enemy-info { display: none; }
@@ -259,3 +259,17 @@ kbd { border: 1px solid #2c434e; padding: 3px 7px; margin-right: 6px; color: #9a
 .vuln-table small { color: var(--muted); font-size: 11px; }
 .sev-crit { color: #ff3d6e; } .sev-high { color: var(--pink); } .sev-med { color: var(--amber); } .sev-low { color: #7fb7c0; } .sev-inv { color: #5d7881; }
 .rp-footer { display: flex; justify-content: space-between; margin-top: 20px; }
+
+/* SKYWAY scenery occupies the full canvas; task text stays fixed and opaque. */
+.topbar { top: 24px; height: 86px; padding: 14px 20px; background: #081324dc; border: 1px solid #7896b740; border-radius: 12px; }
+.chain, .enemy-info { padding: 16px 20px; background: linear-gradient(120deg, #081324ee, #081324b8); border: 1px solid #7896b72e; border-radius: 12px; }
+.chain { left: 54px; }
+.enemy-info { right: 54px; width: 276px; }
+.depth { background: #081324db; padding: 14px; border-radius: 10px; }
+.input-panel { background: #0a1424; border-color: #759ab380; box-shadow: 0 18px 60px #031027cc; border-radius: 10px; }
+.ready-help { color: #f0f7ff; text-shadow: 0 1px 4px #000, 0 1px 10px #000; }
+.sector-sub { color: #bfdbec; }
+.footer { background: #081324f0; border-radius: 8px; padding: 8px 12px; bottom: 18px; }
+
+.chain-pop { top: 190px; }
+.compact-input .chain-pop { display: none; }
