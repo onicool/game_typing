@@ -96,6 +96,7 @@ is waiting; keep each cycle on a local branch until publishing is requested.
 - Final software sample: Chromium 151.0.7922.173, 1280×720, reduced motion, 171 trusted keystrokes over 30 words after warm-up. Modal/screenshot work was excluded from the capture interval. Handler p50/p95/p99/max = 1.2/2.0/2.8/7.2 ms; next-rAF callback = 5.9/10.6/75.2/79.6 ms. These are a single environment sample, not paint or device latency, and the rAF tail's cause is not identified.
 
 ## Next
+- [ ] パートナーキャラクター、キャラごとの技・専用演出（2026-10-05 ユーザー依頼の作業キュー）。基本 1 ステージ、実打鍵に同期した前進・破壊、入力・可読性を固めた後の次段階候補。キャラ数、技の効果、育成や課金の仕様は未決で、現サイクルでは実装しない。
 - Graphics cycle checkpoint complete; ask the user about A/B readability / scene balance before a broader visual redesign. Proposed question: 「B の大きな文字をベースに進めますか？ それとも A に近い電脳空間の大きさを重視しますか？」 Both are local captures; main/production are unchanged.
   - Next candidate after that preference: refine the chosen compact scene/HUD balance, then evaluate a bounded Three.js scene prototype only if depth/lighting needs justify it. Preserve current Canvas2D/static fallback and repeat input/readability checks. No indefinite continuation or new modes in this cycle.
 - 2026-10-05 user requirement update — planning only; graphics implementation has not resumed.
