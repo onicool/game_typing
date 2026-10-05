@@ -344,6 +344,8 @@ window.addEventListener('keydown', event => {
   renderPanel(!outcome.accepted); renderMeters(event.timeStamp); if (round.finished) end();
 });
 window.addEventListener('blur', event => pause(event.timeStamp));
+// Reflow can move the active long-text cursor outside its scroll window.
+window.addEventListener('resize', () => renderPanel($('input-panel')?.classList.contains('miss')));
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 let lastFrame = performance.now();
 function frame(now: number) {

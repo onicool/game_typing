@@ -335,14 +335,23 @@ were left for resumption after the user requested a stop; unit checks pass.
 ```sh
 python checks/angel_integration_check.py http://127.0.0.1:5201 /tmp/game-typing-qa/angel-review-new
 python checks/angel_real_timer_check.py http://127.0.0.1:5201 /tmp/game-typing-qa/angel-clock-new
+python checks/angel_finish_check.py http://127.0.0.1:5201 /tmp/game-typing-qa/angel-finish-new
 ```
 
 前者はfresh contextと固有QA DBで7土地・2人・別綴り・先読み・IME/操作キー・
 停止復帰・native保存競合・読み書き障害と回復・長文の完了/途中/追従・
 JP/EN計測/PB除外・分析から弱点練習・設定原文保全・5画面サイズ・素材/音声障害を確認。
 期限を人工的に進める計測例と、弱点を確実に出す人工診断ログを区別しています。
-後者は通常rAF・実時計で60秒計測を1回走らせます。物理入力/表示遅延は測りません。
+実時計ハーネスは通常rAF・実時計で60秒計測を1回走らせます。物理入力/表示遅延は測りません。
 本体のdebug exportや既存ユーザーDBの読取りは使用しません。
+
+仕上げハーネスは元の4長文をnative入力で完了し、320×568・390×844・480×800・
+640×480・800×600で同じ入力位置の可視性を確認します。幅変更後は実際の2rAFを
+待ちます。7土地の「次の場所へ」、選択と記録のreload、最終土地の境界、
+空のやり直し/地図、中断保存、設定から停止画面への復帰、人物と文字の分離も確認。
+小画面の縦スクロールは必要です。Firefox/WebKitは現在の環境にないため未実施。
+ユニットには実時間の300ms基準を持つ解析ケースがあるため、ブラウザ検証と
+同時に走らせず、ブラウザ終了後に`npm test`を実行してください。
 
 既存のキーボード・設定・ダイアログ・IDB検証は統合ビルドの`/legacy.html`で
 同じものを再実行できます。固定された過去の出力先を上書きしないよう、

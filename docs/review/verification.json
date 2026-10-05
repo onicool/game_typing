@@ -6,8 +6,18 @@
     "passed": 213,
     "files": 11,
     "includes_preexisting_cases": 199,
-    "last_run_utc": "2026-10-05T15:54:52Z",
-    "scope": "Round, typing, persistence, analysis and existing regressions; latest CSS crop was verified by production browser rerun"
+    "last_run_utc": "2026-10-05T16:23:10Z",
+    "scope": "Final complete suite run alone, 213 passed. Shared Round/typing/persistence unchanged in finishing cycle.",
+    "concurrent_attempt": {
+      "passed": false,
+      "passed_tests": 212,
+      "failed_tests": 1,
+      "test": "analyzes 200k events in less than 300ms without mutating input",
+      "elapsed_ms": 470.93676200000004,
+      "limit_ms": 300,
+      "context": "Concurrent with production browser verification; final standalone run passed unchanged threshold",
+      "log": "/tmp/game-typing-qa/angel-integration/finish-unit.txt"
+    }
   },
   "production_build": {
     "passed": true,
@@ -16,10 +26,1039 @@
       "index.html",
       "legacy.html"
     ],
-    "angel_js": "angel-D9frKcF8.js",
-    "angel_css": "angel-5LcQXiFp.css"
+    "angel_js": "angel-7HPJugaL.js",
+    "angel_css": "angel-BlgWxnDp.css"
   },
   "integration": {
+    "browser": "151.0.7922.173",
+    "url": "http://127.0.0.1:5201",
+    "cases": [
+      {
+        "case": "place",
+        "place": 1,
+        "character": "elna",
+        "dict": "jp-angel-heaven",
+        "keys": 66,
+        "layout": {
+          "scrollY": 0,
+          "overflowX": false,
+          "panelInside": true,
+          "nodes": [
+            {
+              "id": "word",
+              "font": 44,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "reading",
+              "font": 15,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "romaji",
+              "font": 29,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-word",
+              "font": 19,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-word",
+              "font": 17,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            }
+          ],
+          "cursors": []
+        },
+        "passed": true
+      },
+      {
+        "case": "place",
+        "place": 2,
+        "character": "towa",
+        "dict": "jp-angel-town",
+        "keys": 66,
+        "layout": {
+          "scrollY": 0,
+          "overflowX": false,
+          "panelInside": true,
+          "nodes": [
+            {
+              "id": "word",
+              "font": 44,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "reading",
+              "font": 15,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "romaji",
+              "font": 29,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-word",
+              "font": 19,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-word",
+              "font": 17,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            }
+          ],
+          "cursors": []
+        },
+        "passed": true
+      },
+      {
+        "case": "place",
+        "place": 3,
+        "character": "elna",
+        "dict": "jp-angel-road",
+        "keys": 79,
+        "layout": {
+          "scrollY": 0,
+          "overflowX": false,
+          "panelInside": true,
+          "nodes": [
+            {
+              "id": "word",
+              "font": 44,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "reading",
+              "font": 15,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "romaji",
+              "font": 29,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-word",
+              "font": 19,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-word",
+              "font": 17,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            }
+          ],
+          "cursors": []
+        },
+        "passed": true
+      },
+      {
+        "case": "place",
+        "place": 4,
+        "character": "towa",
+        "dict": "jp-angel-canal",
+        "keys": 81,
+        "layout": {
+          "scrollY": 0,
+          "overflowX": false,
+          "panelInside": true,
+          "nodes": [
+            {
+              "id": "word",
+              "font": 44,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "reading",
+              "font": 15,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "romaji",
+              "font": 29,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-word",
+              "font": 19,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-word",
+              "font": 17,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            }
+          ],
+          "cursors": []
+        },
+        "passed": true
+      },
+      {
+        "case": "place",
+        "place": 5,
+        "character": "elna",
+        "dict": "jp-angel-theatre",
+        "keys": 70,
+        "layout": {
+          "scrollY": 0,
+          "overflowX": false,
+          "panelInside": true,
+          "nodes": [
+            {
+              "id": "word",
+              "font": 44,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "reading",
+              "font": 15,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "romaji",
+              "font": 29,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-word",
+              "font": 19,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-word",
+              "font": 17,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            }
+          ],
+          "cursors": []
+        },
+        "passed": true
+      },
+      {
+        "case": "place",
+        "place": 6,
+        "character": "towa",
+        "dict": "jp-angel-snow",
+        "keys": 62,
+        "layout": {
+          "scrollY": 0,
+          "overflowX": false,
+          "panelInside": true,
+          "nodes": [
+            {
+              "id": "word",
+              "font": 44,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "reading",
+              "font": 15,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "romaji",
+              "font": 29,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-word",
+              "font": 19,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-word",
+              "font": 17,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            }
+          ],
+          "cursors": []
+        },
+        "passed": true
+      },
+      {
+        "case": "place",
+        "place": 7,
+        "character": "elna",
+        "dict": "jp-angel-city",
+        "keys": 70,
+        "layout": {
+          "scrollY": 0,
+          "overflowX": false,
+          "panelInside": true,
+          "nodes": [
+            {
+              "id": "word",
+              "font": 44,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "reading",
+              "font": 15,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "romaji",
+              "font": 29,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-word",
+              "font": 19,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "next-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-word",
+              "font": 17,
+              "horizontal": true,
+              "withinViewport": true
+            },
+            {
+              "id": "following-guide",
+              "font": 13,
+              "horizontal": true,
+              "withinViewport": true
+            }
+          ],
+          "cursors": []
+        },
+        "passed": true
+      },
+      {
+        "case": "all-seven-reload-report-and-original-row-preserved",
+        "passed": true
+      },
+      {
+        "case": "IME-controls-focus-pause-and-native-log-exclusion",
+        "passed": true,
+        "keys": 10
+      },
+      {
+        "case": "native-write-outage-read-partial-recovery-and-reload",
+        "passed": true
+      },
+      {
+        "case": "old-native-save-completion-cannot-confirm-new-result",
+        "passed": true
+      },
+      {
+        "case": "long-complete-partial-and-visible-cursor-tracking",
+        "passed": true,
+        "keys": 171,
+        "samples": 12
+      },
+      {
+        "case": "JP-English-benchmark-and-interrupted-PB-exclusion",
+        "passed": true,
+        "synthetic_deadline": true
+      },
+      {
+        "case": "report-native-targeted-patch-and-PB-exclusion",
+        "passed": true,
+        "synthetic_diagnostic_fixture": true,
+        "native_patch_keys": 24
+      },
+      {
+        "case": "malformed-settings-original-bytes-and-native-slider-preserved",
+        "passed": true
+      },
+      {
+        "case": "five-desktop-sizes-and-reduced-motion",
+        "passed": true,
+        "layouts": [
+          {
+            "size": [
+              1920,
+              1080
+            ],
+            "scrollY": 0,
+            "overflowX": false,
+            "panelInside": true,
+            "nodes": [
+              {
+                "id": "word",
+                "font": 44,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "reading",
+                "font": 15,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "romaji",
+                "font": 29,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-word",
+                "font": 19,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-word",
+                "font": 17,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              }
+            ],
+            "cursors": []
+          },
+          {
+            "size": [
+              1366,
+              768
+            ],
+            "scrollY": 0,
+            "overflowX": false,
+            "panelInside": true,
+            "nodes": [
+              {
+                "id": "word",
+                "font": 44,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "reading",
+                "font": 15,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "romaji",
+                "font": 29,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-word",
+                "font": 19,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-word",
+                "font": 17,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              }
+            ],
+            "cursors": []
+          },
+          {
+            "size": [
+              1024,
+              768
+            ],
+            "scrollY": 0,
+            "overflowX": false,
+            "panelInside": true,
+            "nodes": [
+              {
+                "id": "word",
+                "font": 34.816,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "reading",
+                "font": 15,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "romaji",
+                "font": 22.528,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-word",
+                "font": 19,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-word",
+                "font": 17,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              }
+            ],
+            "cursors": []
+          },
+          {
+            "size": [
+              800,
+              600
+            ],
+            "scrollY": 0,
+            "overflowX": false,
+            "panelInside": true,
+            "nodes": [
+              {
+                "id": "word",
+                "font": 30,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "reading",
+                "font": 14,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "romaji",
+                "font": 22,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-word",
+                "font": 18,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-word",
+                "font": 15,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              }
+            ],
+            "cursors": []
+          },
+          {
+            "size": [
+              768,
+              1024
+            ],
+            "scrollY": 0,
+            "overflowX": false,
+            "panelInside": true,
+            "nodes": [
+              {
+                "id": "word",
+                "font": 32,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "reading",
+                "font": 15,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "romaji",
+                "font": 22,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-word",
+                "font": 18,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "next-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-word",
+                "font": 15,
+                "horizontal": true,
+                "withinViewport": true
+              },
+              {
+                "id": "following-guide",
+                "font": 13,
+                "horizontal": true,
+                "withinViewport": true
+              }
+            ],
+            "cursors": []
+          }
+        ]
+      },
+      {
+        "case": "low-graphics-all-assets-unavailable-audio-failure-save",
+        "passed": true
+      }
+    ],
+    "page_errors": [],
+    "captures": [
+      "stage-01.png",
+      "stage-02.png",
+      "stage-03.png",
+      "stage-04.png",
+      "stage-05.png",
+      "stage-06.png",
+      "stage-07.png"
+    ],
+    "synthetic_storage_only": true,
+    "real_60_second_run_not_performed": true
+  },
+  "real_timer": {
+    "passed": true,
+    "browser": "151.0.7922.173",
+    "real_elapsed_to_result_ms": 60027.20000000298,
+    "native_keys": 34,
+    "mode": "benchmark",
+    "page_errors": [],
+    "physical_device_latency_not_measured": true
+  },
+  "legacy_regressions": {
+    "keyboard": [
+      {
+        "case": "tab-native-sound-range-shift-tab-dictionary-shortcut-and-reload",
+        "passed": true
+      },
+      {
+        "case": "settings-controls-tab-space-retained-focus-escape",
+        "passed": true
+      },
+      {
+        "case": "control-keys-excluded-from-round-and-escape-resume",
+        "passed": true,
+        "page_errors": []
+      }
+    ],
+    "settings": [
+      {
+        "case": "corrupt-values-reload-and-new-context",
+        "passed": true,
+        "original_bytes_preserved": true,
+        "page_errors": []
+      },
+      {
+        "case": "external-repair-then-explicit-save-and-reload",
+        "passed": true
+      },
+      {
+        "case": "write-failure-memory-reload-recovery",
+        "passed": true,
+        "page_errors": []
+      },
+      {
+        "case": "read-access-denied-preservation-and-reload-recovery",
+        "passed": true,
+        "page_errors": []
+      }
+    ],
+    "dialog-input": [
+      {
+        "case": "dictionary-shortcut-only-unmodified-noncomposing-title",
+        "passed": true
+      },
+      {
+        "case": "settings-entry-cycle-background-isolation-native-activation-and-focus-return",
+        "passed": true
+      },
+      {
+        "case": "settings-native-editor-composition-and-empty-tab-list",
+        "passed": true
+      },
+      {
+        "case": "benchmark-d-caps-d-ignored-flags-pause-ime-and-burst-input",
+        "passed": true,
+        "seed": 8,
+        "logged_keys": 181,
+        "known_misses": 1
+      },
+      {
+        "case": "pause-native-opener-focus-return-control-escape-and-dialog-escape",
+        "passed": true
+      },
+      {
+        "case": "report-d-ignored-and-patch-d-counted-as-input",
+        "passed": true,
+        "logged_patch_keys": 29
+      }
+    ]
+  },
+  "legacy_idb": {
+    "app": [
+      {
+        "case": "throw",
+        "passed": true,
+        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 3,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "missing",
+        "passed": true,
+        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 3,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "error",
+        "passed": true,
+        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 3,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "blocked-late-success",
+        "passed": true,
+        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 4,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "transaction-abort",
+        "passed": true,
+        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 3,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "closed-connection",
+        "passed": true,
+        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 3,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "unexpected-close",
+        "passed": true,
+        "first_status": "今回の練習記録をこのブラウザに保存しました。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 3,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "versionchange",
+        "passed": true,
+        "first_status": "今回の練習記録をこのブラウザに保存しました。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 3,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "repeated-outage",
+        "passed": true,
+        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
+        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
+        "disk_sessions": 4,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "delayed-complete-after-retry",
+        "passed": true,
+        "disk_sessions": 3,
+        "old_completion_did_not_change_current_result": true,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      },
+      {
+        "case": "delayed-abort-after-retry",
+        "passed": true,
+        "disk_sessions": 3,
+        "old_completion_did_not_change_current_result": true,
+        "original_unchanged": true,
+        "exact_typed_keys_and_reload": true,
+        "page_errors": []
+      }
+    ],
+    "native_store": [
+      {
+        "case": "same-id-recovery-and-in-flight-replacement",
+        "passed": true,
+        "statuses": {
+          "first": "memory",
+          "recovered": "persistent",
+          "olderStatus": "persistent",
+          "latestStatus": "persistent",
+          "memoryKeys": [
+            "d"
+          ]
+        },
+        "disk_sessions": 2,
+        "no_duplicate_or_stale_overwrite": true
+      }
+    ],
+    "browser": "151.0.7922.173"
+  },
+  "screenshots": [
+    {
+      "file": "docs/review/characters.webp",
+      "source": "/tmp/game-typing-qa/angel-integration/production-final-03/01-characters.png",
+      "dimensions": [
+        1366,
+        768
+      ],
+      "bytes": 68966,
+      "compression": "WebP quality 88, same dimensions, no composition"
+    },
+    {
+      "file": "docs/review/map.webp",
+      "source": "/tmp/game-typing-qa/angel-integration/production-final-03/02-map.png",
+      "dimensions": [
+        1366,
+        768
+      ],
+      "bytes": 142082,
+      "compression": "WebP quality 88, same dimensions, no composition"
+    },
+    {
+      "file": "docs/review/battle.webp",
+      "source": "/tmp/game-typing-qa/angel-integration/production-final-03/stage-01.png",
+      "dimensions": [
+        1366,
+        768
+      ],
+      "bytes": 153308,
+      "compression": "WebP quality 88, same dimensions, no composition"
+    },
+    {
+      "file": "docs/review/long-800x600.webp",
+      "source": "/tmp/game-typing-qa/angel-integration/production-final-03/06-long-800x600.png",
+      "dimensions": [
+        800,
+        600
+      ],
+      "bytes": 99672,
+      "compression": "WebP quality 88, same dimensions, no composition"
+    },
+    {
+      "file": "docs/review/finish-long-390.webp",
+      "source": "/tmp/game-typing-qa/angel-integration/finish-05/long-1-390x844.png",
+      "dimensions": [
+        390,
+        1534
+      ],
+      "bytes": 72610,
+      "compression": "Same-size WebP quality 88; actual full-page capture; vertical scrolling required"
+    },
+    {
+      "file": "docs/review/finish-long-640.webp",
+      "source": "/tmp/game-typing-qa/angel-integration/finish-05/long-2-640x480.png",
+      "dimensions": [
+        640,
+        711
+      ],
+      "bytes": 86638,
+      "compression": "Same-size WebP quality 88; actual full-page capture; vertical scrolling required"
+    },
+    {
+      "file": "docs/review/finish-characters-320.webp",
+      "source": "/tmp/game-typing-qa/angel-integration/finish-05/characters-towa-320x568.png",
+      "dimensions": [
+        320,
+        1368
+      ],
+      "bytes": 67866,
+      "compression": "Same-size WebP quality 88; actual full-page capture; vertical scrolling required"
+    }
+  ],
+  "limits": [
+    "Headless Chromium 151 only",
+    "No physical input or display latency measurement",
+    "No user browser/profile read",
+    "No paid product comparison",
+    "No production deployment"
+  ],
+  "previous_integration": {
     "browser": "151.0.7922.173",
     "url": "http://127.0.0.1:5201",
     "cases": [
@@ -761,261 +1800,184 @@
     "synthetic_storage_only": true,
     "real_60_second_run_not_performed": true
   },
-  "real_timer": {
-    "passed": true,
+  "finishing": {
     "browser": "151.0.7922.173",
-    "real_elapsed_to_result_ms": 60027.20000000298,
-    "native_keys": 34,
-    "mode": "benchmark",
+    "url": "http://127.0.0.1:5201",
     "page_errors": [],
-    "physical_device_latency_not_measured": true
-  },
-  "legacy_regressions": {
-    "keyboard": [
+    "other_browsers": "Firefox and WebKit not installed; not run",
+    "vertical_scroll_required_on_small_screens": true,
+    "synthetic_isolated_data": true,
+    "physical_device_not_tested": true,
+    "cases": [
       {
-        "case": "tab-native-sound-range-shift-tab-dictionary-shortcut-and-reload",
-        "passed": true
-      },
-      {
-        "case": "settings-controls-tab-space-retained-focus-escape",
-        "passed": true
-      },
-      {
-        "case": "control-keys-excluded-from-round-and-escape-resume",
+        "case": "full-original-passage-at-five-small-sizes",
+        "seed": 0,
+        "display": "駅前の時計を見上げて、友達が来るのを待っていた。\n人の流れの向こうから、聞き慣れた声が近づいてくる。\n二人で今日の予定を話しながら、いつもの店へゆっくり歩いた。",
+        "keys": 168,
         "passed": true,
-        "page_errors": []
+        "cursor_layout_checks": 70,
+        "sizes": [
+          [
+            320,
+            568
+          ],
+          [
+            390,
+            844
+          ],
+          [
+            480,
+            800
+          ],
+          [
+            640,
+            480
+          ],
+          [
+            800,
+            600
+          ]
+        ],
+        "all_markers_visible": true,
+        "no_horizontal_overflow": true
+      },
+      {
+        "case": "full-original-passage-at-five-small-sizes",
+        "seed": 3,
+        "display": "図書館の奥で、まだ読んだことのない本を選んだ。\n最初のページを開くと、知らない町の音が聞こえる気がした。\n急がずに読み進めれば、言葉の向こうにある世界が広がっていく。",
+        "keys": 173,
+        "passed": true,
+        "cursor_layout_checks": 75,
+        "sizes": [
+          [
+            320,
+            568
+          ],
+          [
+            390,
+            844
+          ],
+          [
+            480,
+            800
+          ],
+          [
+            640,
+            480
+          ],
+          [
+            800,
+            600
+          ]
+        ],
+        "all_markers_visible": true,
+        "no_horizontal_overflow": true
+      },
+      {
+        "case": "full-original-passage-at-five-small-sizes",
+        "seed": 4,
+        "display": "雨がやんだ朝、窓を開けると冷たい風が入ってきた。\n道に残った小さな水たまりが、明るい空を映している。\n今日は少し遠くまで歩いて、新しい景色を見つけよう。",
+        "keys": 171,
+        "passed": true,
+        "cursor_layout_checks": 75,
+        "sizes": [
+          [
+            320,
+            568
+          ],
+          [
+            390,
+            844
+          ],
+          [
+            480,
+            800
+          ],
+          [
+            640,
+            480
+          ],
+          [
+            800,
+            600
+          ]
+        ],
+        "all_markers_visible": true,
+        "no_horizontal_overflow": true
+      },
+      {
+        "case": "full-original-passage-at-five-small-sizes",
+        "seed": 5,
+        "display": "小さな机の上に、紙と鉛筆を並べてみた。\n思いついたことを一つずつ書けば、曖昧だった考えに形が生まれる。\nうまく書けなくても、明日また続きから始めればいい。",
+        "keys": 173,
+        "passed": true,
+        "cursor_layout_checks": 75,
+        "sizes": [
+          [
+            320,
+            568
+          ],
+          [
+            390,
+            844
+          ],
+          [
+            480,
+            800
+          ],
+          [
+            640,
+            480
+          ],
+          [
+            800,
+            600
+          ]
+        ],
+        "all_markers_visible": true,
+        "no_horizontal_overflow": true
+      },
+      {
+        "case": "next-place-chain-seven-stages-selection-reload-and-last-stage-report",
+        "passed": true,
+        "sessions": 7,
+        "native_keys": 503
+      },
+      {
+        "case": "empty-retry-map-nested-settings-preserve-input-partial-save-and-history",
+        "passed": true,
+        "sessions": 8
+      },
+      {
+        "case": "small-character-images-text-and-card-separation",
+        "passed": true
       }
     ],
-    "settings": [
+    "full_geometry_receipt": "/tmp/game-typing-qa/angel-integration/finish-05/results.json",
+    "prior_checkpoint": "66cf4584a4461460be84140760403267c860773f",
+    "earlier_failures": [
       {
-        "case": "corrupt-values-reload-and-new-context",
-        "passed": true,
-        "original_bytes_preserved": true,
-        "page_errors": []
+        "attempt": "finish-01",
+        "cause": "Real 640px flex preview overflow, fixed by min-width:0 and bounded flex child"
       },
       {
-        "case": "external-repair-then-explicit-save-and-reload",
-        "passed": true
+        "attempt": "finish-02",
+        "cause": "Real active roman cursor outside viewport after width change; resize re-follow added"
       },
       {
-        "case": "write-failure-memory-reload-recovery",
-        "passed": true,
-        "page_errors": []
+        "attempt": "finish-03",
+        "cause": "Harness used fixed20ms after rapid resize; changed to await2actualrAF before geometry assertion"
       },
       {
-        "case": "read-access-denied-preservation-and-reload-recovery",
-        "passed": true,
-        "page_errors": []
-      }
-    ],
-    "dialog-input": [
-      {
-        "case": "dictionary-shortcut-only-unmodified-noncomposing-title",
-        "passed": true
-      },
-      {
-        "case": "settings-entry-cycle-background-isolation-native-activation-and-focus-return",
-        "passed": true
-      },
-      {
-        "case": "settings-native-editor-composition-and-empty-tab-list",
-        "passed": true
-      },
-      {
-        "case": "benchmark-d-caps-d-ignored-flags-pause-ime-and-burst-input",
-        "passed": true,
-        "seed": 8,
-        "logged_keys": 181,
-        "known_misses": 1
-      },
-      {
-        "case": "pause-native-opener-focus-return-control-escape-and-dialog-escape",
-        "passed": true
-      },
-      {
-        "case": "report-d-ignored-and-patch-d-counted-as-input",
-        "passed": true,
-        "logged_patch_keys": 29
+        "attempt": "finish-04",
+        "cause": "Real81px sentence in62px window at640x480; narrowed desktop sentence window raised to110px"
       }
     ]
   },
-  "legacy_idb": {
-    "app": [
-      {
-        "case": "throw",
-        "passed": true,
-        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
-        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
-        "disk_sessions": 3,
-        "original_unchanged": true,
-        "exact_typed_keys_and_reload": true,
-        "page_errors": []
-      },
-      {
-        "case": "missing",
-        "passed": true,
-        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
-        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
-        "disk_sessions": 3,
-        "original_unchanged": true,
-        "exact_typed_keys_and_reload": true,
-        "page_errors": []
-      },
-      {
-        "case": "error",
-        "passed": true,
-        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
-        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
-        "disk_sessions": 3,
-        "original_unchanged": true,
-        "exact_typed_keys_and_reload": true,
-        "page_errors": []
-      },
-      {
-        "case": "blocked-late-success",
-        "passed": true,
-        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
-        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
-        "disk_sessions": 4,
-        "original_unchanged": true,
-        "exact_typed_keys_and_reload": true,
-        "page_errors": []
-      },
-      {
-        "case": "transaction-abort",
-        "passed": true,
-        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
-        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
-        "disk_sessions": 3,
-        "original_unchanged": true,
-        "exact_typed_keys_and_reload": true,
-        "page_errors": []
-      },
-      {
-        "case": "closed-connection",
-        "passed": true,
-        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
-        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
-        "disk_sessions": 3,
-        "original_unchanged": true,
-        "exact_typed_keys_and_reload": true,
-        "page_errors": []
-      },
-      {
-        "case": "unexpected-close",
-        "passed": true,
-        "first_status": "今回の練習記録をこのブラウザに保存しました。",
-        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
-        "disk_sessions": 3,
-        "original_unchanged": true,
-        "exact_typed_keys_and_reload": true,
-        "page_errors": []
-      },
-      {
-        "case": "versionchange",
-        "passed": true,
-        "first_status": "今回の練習記録をこのブラウザに保存しました。",
-        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
-        "disk_sessions": 3,
-        "original_unchanged": true,
-        "exact_typed_keys_and_reload": true,
-        "page_errors": []
-      },
-      {
-        "case": "repeated-outage",
-        "passed": true,
-        "first_status": "今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。",
-        "recovered_status": "今回の練習記録をこのブラウザに保存しました。",
-        "disk_sessions": 4,
-        "original_unchanged": true,
-        "exact_typed_keys_and_reload": true,
-        "page_errors": []
-      },
-      {
-        "case": "delayed-complete-after-retry",
-        "passed": true,
-        "disk_sessions": 3,
-        "old_completion_did_not_change_current_result": true,
-        "original_unchanged": true,
-        "exact_typed_keys_and_reload": true,
-        "page_errors": []
-      },
-      {
-        "case": "delayed-abort-after-retry",
-        "passed": true,
-        "disk_sessions": 3,
-        "old_completion_did_not_change_current_result": true,
-        "original_unchanged": true,
-        "exact_typed_keys_and_reload": true,
-        "page_errors": []
-      }
-    ],
-    "native_store": [
-      {
-        "case": "same-id-recovery-and-in-flight-replacement",
-        "passed": true,
-        "statuses": {
-          "first": "memory",
-          "recovered": "persistent",
-          "olderStatus": "persistent",
-          "latestStatus": "persistent",
-          "memoryKeys": [
-            "d"
-          ]
-        },
-        "disk_sessions": 2,
-        "no_duplicate_or_stale_overwrite": true
-      }
-    ],
-    "browser": "151.0.7922.173"
-  },
-  "screenshots": [
-    {
-      "file": "docs/review/characters.webp",
-      "source": "/tmp/game-typing-qa/angel-integration/production-final-03/01-characters.png",
-      "dimensions": [
-        1366,
-        768
-      ],
-      "bytes": 68966,
-      "compression": "WebP quality 88, same dimensions, no composition"
-    },
-    {
-      "file": "docs/review/map.webp",
-      "source": "/tmp/game-typing-qa/angel-integration/production-final-03/02-map.png",
-      "dimensions": [
-        1366,
-        768
-      ],
-      "bytes": 142082,
-      "compression": "WebP quality 88, same dimensions, no composition"
-    },
-    {
-      "file": "docs/review/battle.webp",
-      "source": "/tmp/game-typing-qa/angel-integration/production-final-03/stage-01.png",
-      "dimensions": [
-        1366,
-        768
-      ],
-      "bytes": 153308,
-      "compression": "WebP quality 88, same dimensions, no composition"
-    },
-    {
-      "file": "docs/review/long-800x600.webp",
-      "source": "/tmp/game-typing-qa/angel-integration/production-final-03/06-long-800x600.png",
-      "dimensions": [
-        800,
-        600
-      ],
-      "bytes": 99672,
-      "compression": "WebP quality 88, same dimensions, no composition"
-    }
-  ],
-  "limits": [
-    "Headless Chromium 151 only",
-    "No physical input or display latency measurement",
-    "No user browser/profile read",
-    "No paid product comparison",
-    "No production deployment"
-  ]
+  "external_sharing": {
+    "state": "Explicitly on hold until user returns; no external writes in finishing cycle",
+    "previous_rejected_action": "GitHub create_branch onicool/game_typing integrate/angel-typing-engine at31a75f3",
+    "retry_result": "Rejected: persistent remote branch outside earlier local-only scope; later authorization seen only in untrusted assistant context",
+    "branch_or_PR_created": false
+  }
 }

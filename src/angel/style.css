@@ -140,6 +140,7 @@
 #angel-ui-studio .long-input .av-reading{max-height:40px;line-height:1.4;}
 #angel-ui-studio .long-input .av-romaji{max-height:56px;font-size:20px;line-height:1.4;}
 #angel-ui-studio .long-input .av-next{max-height:62px;}
+#angel-ui-studio .long-input .av-next>div{min-width:0;flex:1;}
 #angel-ui-studio .long-input .av-next strong{font-size:15px;line-height:1.45;max-height:44px;overflow:auto;}
 #angel-ui-studio .long-input .av-next .av-guide{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;}
 #angel-ui-studio .av-later strong{max-height:90px;overflow:auto;}
@@ -150,3 +151,18 @@
 #angel-ui-studio .av-battle:has(.long-input) .av-later strong{max-height:54px;}
 #angel-ui-studio .av-battle:has(.long-input) .av-later .av-guide{max-height:38px;}
 @media(max-height:650px) and (min-width:621px){#angel-ui-studio .long-input{padding-bottom:7px;}}
+/* Long passages need readable line width; keep both previews with their meters
+   below the main panel on narrow screens instead of clipping the right label. */
+@media(max-width:620px){
+  #angel-ui-studio .av-battle:has(.long-input) .av-combat-dock{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;}
+  #angel-ui-studio .long-input{grid-column:1/-1;grid-row:1;}
+  #angel-ui-studio .av-battle:has(.long-input) .av-combat-dock>.av-meter{grid-column:1;grid-row:2;}
+  #angel-ui-studio .av-battle:has(.long-input) .av-right-side{grid-column:2;grid-row:2;min-width:0;}
+  #angel-ui-studio .av-battle:has(.long-input) .av-later>span:first-child{white-space:normal;}
+  #angel-ui-studio .long-input .av-input-top{flex-direction:row;align-items:center;}
+  #angel-ui-studio .long-input .av-current-word{max-height:120px;}
+  #angel-ui-studio .long-input .av-next{max-height:none;}
+}
+@media(min-width:621px) and (max-width:760px){
+  #angel-ui-studio .long-input .av-current-word{max-height:110px;}
+}
