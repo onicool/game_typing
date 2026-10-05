@@ -10,26 +10,19 @@ import type { Report, StoredKey, Vuln } from './stats/types';
 import { renderReport } from './ui/report';
 import { loadBaselines, updateBaselines } from './stats/baselines';
 import { PatchSource } from './stats/select';
+import { createSettingsStore, isBoolean, isDictionaryIndex, isEffectLevel, isNonNegativeNumber, isSpellingPreferences, isVolume } from './storage/settings';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
-const store = {
-  get<T>(key: string, fallback: T): T {
-    try {
-      const v = localStorage.getItem(`icebreaker.${key}`);
-      return v === null ? fallback : (JSON.parse(v) as T);
-    } catch {
-      return fallback;
-    }
-  },
-  set(key: string, value: unknown) {
-    try {
-      localStorage.setItem(`icebreaker.${key}`, JSON.stringify(value));
-    } catch {
-      /* storage unavailable: run without persistence */
-    }
-  },
-};
+const store = createSettingsStore(issue => {
+  const notice = $('settings-storage-state');
+  notice.textContent = issue === 'invalid'
+    ? '保存設定の一部を読み込めません。一時設定で動作しています。元の保存内容は保持しています。'
+    : issue === 'unavailable'
+      ? '設定の読み込み・保存ができないため、このページ内でのみ設定を保持します。'
+      : '';
+  notice.classList.toggle('hidden', issue === null);
+});
 
 const stage = $('stage');
 const scene = new Scene($<HTMLCanvasElement>('scene'));
@@ -42,12 +35,11 @@ let reportMetric: 'latency' | 'miss' = 'latency';
 let reportRequest = 0; // bumped on every open/close so a slow load cannot render over a newer one
 let report: { data: Report; dictId: string; request: number } | null = null;
 let settingsOpen = false;
-let dictIdx = store.get('dict', 0) % DICTIONARIES.length;
-const prefs: Record<string, string> = store.get('prefs', {});
+let dictIdx = store.get('dict', 0, isDictionaryIndex(DICTIONARIES.length));
+const prefs: Record<string, string> = store.get('prefs', {}, isSpellingPreferences);
 let round: Round | null = null;
-audio.enabled = store.get('sound', true);
-const savedVolume = store.get('volume', 1);
-audio.setVolume(typeof savedVolume === 'number' && Number.isFinite(savedVolume) ? Math.max(0, Math.min(1, savedVolume)) : 1);
+audio.enabled = store.get('sound', true, isBoolean);
+audio.setVolume(store.get('volume', 1, isVolume));
 
 type Effect = 'shake' | 'flash' | 'motion';
 type EffectLevel = 0 | 0.5 | 1;
@@ -55,8 +47,7 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matc
 const effectDefaults: Record<Effect, EffectLevel> = { shake: reducedMotion ? 0 : 1, flash: 1, motion: reducedMotion ? 0 : 1 };
 const effects = {} as Record<Effect, EffectLevel>;
 for (const key of ['shake', 'flash', 'motion'] as const) {
-  const value = store.get(`effects.${key}`, effectDefaults[key]);
-  effects[key] = value === 0 || value === 0.5 || value === 1 ? value : effectDefaults[key];
+  effects[key] = store.get(`effects.${key}`, effectDefaults[key], isEffectLevel);
 }
 
 // ---- layout ---------------------------------------------------------------
@@ -118,9 +109,9 @@ function toggleSound() {
 }
 
 els.soundToggle.addEventListener('mousedown', (e) => e.preventDefault());
-els.soundToggle.addEventListener('click', () => {
+els.soundToggle.addEventListener('click', (e) => {
   toggleSound();
-  els.soundToggle.blur();
+  if (e.detail > 0) els.soundToggle.blur();
 });
 els.volume.addEventListener('input', () => {
   audio.ensure();
@@ -128,12 +119,7 @@ els.volume.addEventListener('input', () => {
   store.set('volume', audio.volume);
   renderSound();
 });
-els.volume.addEventListener('change', () => els.volume.blur());
 els.volume.addEventListener('pointerup', () => els.volume.blur());
-els.volume.addEventListener('keydown', (e) => {
-  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) e.preventDefault();
-  els.volume.blur();
-});
 
 function applyEffects() {
   scene.setEffects(effects);
@@ -154,9 +140,9 @@ function cycleEffect(key: Effect) {
 
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-effect]')) {
   button.addEventListener('mousedown', (e) => e.preventDefault());
-  button.addEventListener('click', () => {
+  button.addEventListener('click', (e) => {
     cycleEffect(button.dataset.effect as Effect);
-    button.blur();
+    if (e.detail > 0) button.blur();
   });
 }
 
@@ -340,7 +326,7 @@ function renderTitle() {
   const d = DICTIONARIES[dictIdx];
   $('dict-name').textContent = d.name;
   els.modeLabel.textContent = `${d.label}　|　IME OFF`;
-  const best = store.get<number>(`pb.${d.id}`, 0);
+  const best = store.get(`pb.${d.id}`, 0, isNonNegativeNumber);
   $('title-best').textContent = best ? `自己ベスト ${best.toFixed(2)} 字/秒` : '';
   renderSound();
 }
@@ -402,7 +388,7 @@ function endRound() {
   const sessionMode = isPatch ? 'patch' : interrupted ? 'practice' : 'benchmark';
   const eligibleForBest = !interrupted && !isPatch;
   const pbKey = `pb.${d.id}`;
-  const best = store.get<number>(pbKey, 0);
+  const best = store.get(pbKey, 0, isNonNegativeNumber);
   if (eligibleForBest && r.kanaPerSec > best) store.set(pbKey, r.kanaPerSec);
   store.set('prefs', prefs);
   updateBaselines(d, round.log);
@@ -484,10 +470,15 @@ function toTitle() {
 // ---- input ----------------------------------------------------------------
 
 window.addEventListener('keydown', (e) => {
-  if (e.target instanceof HTMLInputElement && e.target !== els.volume) return;
-  if (e.target instanceof HTMLButtonElement) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
-  if (e.key === 'Tab' || e.key === ' ') e.preventDefault();
+  // Native controls own their keys. Tab follows the browser's focus order;
+  // Escape releases control focus and still performs the screen's usual action.
+  if (e.key === 'Tab') return;
+  if (e.target instanceof HTMLElement && e.target.closest('button, input, select, textarea, [contenteditable]')) {
+    if (e.key !== 'Escape') return;
+    e.target.blur();
+  }
+  if (e.key === ' ') e.preventDefault();
 
   // Paused keys are handled before composition or character input can reach Round.
   if (mode === 'play' && round?.paused) {
@@ -527,7 +518,7 @@ window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
     if (e.key === 'r' || e.key === 'R') return void openReport();
     if (e.key === ' ' || e.key === 'Enter') startRound();
-    else if (e.key === 'Tab') {
+    else if (e.key.toLowerCase() === 'd') {
       dictIdx = (dictIdx + 1) % DICTIONARIES.length;
       reportRequest++;
       report = null;

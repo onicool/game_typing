@@ -1,11 +1,26 @@
 import type { Dictionary } from '../content/words';
 import type { KeyLog } from '../game/round';
 import type { StoredKey } from './types';
+import { writePreservingInvalid } from '../storage/settings';
 
 export type Baselines = Map<string, { n: number; meanLog: number }>;
 const CAP = 200;
 const storageKey = (dict: Dictionary | string): string =>
   `icebreaker-baselines-v1:${typeof dict === 'string' ? dict : dict.id}`;
+
+// Reads may salvage recognised entries, but writes must preserve a partially
+// damaged record too: filtering it and saving would destroy the original bytes.
+function isBaselineRecord(value: unknown): boolean {
+  return Array.isArray(value) && value.every(entry => {
+    if (!Array.isArray(entry) || entry.length !== 2) return false;
+    const [pair, baseline] = entry;
+    if (typeof pair !== 'string' || !baseline || typeof baseline !== 'object') return false;
+    const { n, meanLog } = baseline;
+    return typeof n === 'number' && Number.isFinite(n) && n >= 1
+      && typeof meanLog === 'number' && Number.isFinite(meanLog)
+      && Math.exp(meanLog) > 0 && meanLog < Math.log(3000);
+  });
+}
 
 /** Each call returns an independent snapshot; corrupt/unavailable storage is harmless. */
 export function loadBaselines(dict: Dictionary | string): Baselines {
@@ -41,6 +56,5 @@ export function updateBaselines(dict: Dictionary | string, log: KeyLog[] | Store
     const meanLog = old ? old.meanLog + (Math.log(event.dt) - old.meanLog) / n : Math.log(event.dt);
     baselines.set(pair, { n, meanLog });
   }
-  try { localStorage.setItem(storageKey(dict), JSON.stringify([...baselines])); }
-  catch { /* Timing remains playable when persistence is unavailable. */ }
+  writePreservingInvalid(storageKey(dict), [...baselines], isBaselineRecord);
 }

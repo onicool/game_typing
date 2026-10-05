@@ -123,6 +123,7 @@ kbd { border: 1px solid #2c434e; padding: 3px 7px; margin-right: 6px; color: #9a
 .sound-controls { gap: 10px; }
 .sound-controls button { font: inherit; letter-spacing: inherit; color: #b4c9d0; background: #080f16; border: 1px solid #2a4a52; padding: 4px 8px; cursor: pointer; }
 .sound-controls button:hover { border-color: var(--cyan); }
+.sound-controls :focus-visible, .settings-options button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
 .sound-controls input { width: 100px; height: 18px; accent-color: var(--cyan); cursor: pointer; margin: 0; }
 .overlay-open .footer-controls > span:first-child, .overlay-open .footer .center, .overlay-open .footer > .signal { visibility: hidden; }
 
@@ -174,6 +175,7 @@ kbd { border: 1px solid #2c434e; padding: 3px 7px; margin-right: 6px; color: #9a
 .motion-off .chain-pop { transition: none; }
 
 .ime-warning { position: absolute; left: 50%; top: 700px; transform: translateX(-50%); z-index: 30; background: #3a0d18; border: 1px solid var(--red); color: #ffd0d8; padding: 12px 24px; font-family: var(--jp); font-size: 16px; }
+.settings-storage-state { position: absolute; top: 140px; left: 56px; right: 56px; z-index: 40; padding: 10px 16px; border-left: 2px solid var(--amber); background: var(--panel); color: var(--text); font-size: calc(14px * var(--text-boost)); line-height: 1.6; overflow-wrap: anywhere; }
 
 /* vulnerability report */
 .overlay.report { align-items: stretch; justify-content: stretch; background: #03070bf7; }

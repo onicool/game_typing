@@ -59,4 +59,27 @@ describe('persistent personal baselines', () => {
     expect(loadBaselines('jp-test').size).toBe(0);
     expect(() => updateBaselines('jp-test', [event(100)])).not.toThrow();
   });
+
+  it.each(['{broken', 'null', '{"futureVersion":2}',
+    JSON.stringify([['ka', { n: 8, meanLog: Math.log(200) }], ['damaged', null]])])
+  ('preserves invalid original baseline bytes on round completion: %s', raw => {
+    const data = mockStorage();
+    const key = 'icebreaker-baselines-v1:jp-test';
+    data.set(key, raw);
+    updateBaselines('jp-test', [event(100), event(300)]);
+    expect(data.get(key)).toBe(raw);
+    // Recognised entries can still be used without rewriting the original.
+    if (raw.startsWith('[[')) expect(loadBaselines('jp-test').get('ka')!.n).toBe(8);
+  });
+
+  it('can save new baselines after an external repair of the original record', () => {
+    const data = mockStorage();
+    const key = 'icebreaker-baselines-v1:jp-test';
+    data.set(key, '{broken');
+    updateBaselines('jp-test', [event(100)]);
+    expect(data.get(key)).toBe('{broken');
+    data.set(key, JSON.stringify([['ka', { n: 1, meanLog: Math.log(200) }]]));
+    updateBaselines('jp-test', [event(100)]);
+    expect(loadBaselines('jp-test').get('ka')!.n).toBe(2);
+  });
 });
