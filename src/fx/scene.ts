@@ -234,19 +234,17 @@ export class Scene {
 
   /** The whole firewall is destroyed: shatter, flash, rush forward. */
   private showBreach() {
-    // The outgoing wall opens only once the completing packet has arrived.
-    // Snapshot its outline so it cannot become attached to the next wall.
-    this.openings.push({ pts: this.hullPts.map(([x, y]) => [x, y]), life: 0, max: 0.42 });
-    if (this.openings.length > 4) this.openings.shift();
+    // User preference: A's shattering feedback, with the fixed packet-arrival
+    // timing and existing low-load/reduced-motion protections preserved.
     this.generation++;
     this.hitStop = 0.06;
     this.flash = 1;
     this.shake = 18;
     this.speed = 2600;
-    this.burstShards(this.lowGraphics ? 5 : 18, 1.2);
+    this.burstShards(this.lowGraphics ? 5 : 34, 1.2);
     this.rings.push({ r: this.cubeRadius, life: 0, max: 0.7, color: PINK, grow: 520 });
     this.rings.push({ r: this.cubeRadius * 0.6, life: 0, max: 0.55, color: CYAN, grow: 420 });
-    if (this.effects.motion > 0) for (let i = 0; i < (this.lowGraphics ? 4 : 14); i++) this.spark(CX + rand(-40, 40), CY + rand(-40, 40), rand(700, 1600), Math.random() < 0.5 ? CYAN : PINK, 0.6);
+    if (this.effects.motion > 0) for (let i = 0; i < (this.lowGraphics ? 4 : 22); i++) this.spark(CX + rand(-40, 40), CY + rand(-40, 40), rand(700, 1600), Math.random() < 0.5 ? CYAN : PINK, 0.6);
     this.cracks.length = 0;
     this.damage = 0;
     this.spawnT = this.effects.motion === 0 ? 1 : 0;

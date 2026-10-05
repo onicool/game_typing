@@ -1,11 +1,13 @@
 import { JP_WORDS } from './data_jp';
 import { EN_WORDS } from './data_en';
+import { PASSAGES } from './passages';
 export interface Word {
   display: string;
   /** Stable dictionary/display identity when supplied by a word source. */
   id?: string;
   /** Kana reading for Japanese, literal text for English. */
   reading: string;
+  segments?: { display: string; reading: string }[];
 }
 
 export interface Dictionary {
@@ -13,6 +15,7 @@ export interface Dictionary {
   name: string;
   label: string; // shown in the input panel footer
   words: Word[];
+  kind?: 'passage';
 }
 
 const jp = (pairs: string): Word[] =>
@@ -152,6 +155,7 @@ const strip = (ws: { display: string; reading: string }[]): Word[] => ws.map(({ 
 export const DICTIONARIES: Dictionary[] = [
   { id: 'jp-core', name: '日本語', label: 'JP / ROMAJI', words: uniqueWords([...JAPANESE, ...strip(JP_WORDS)], 'jp-core') },
   { id: 'en-core', name: 'English', label: 'EN / DIRECT', words: uniqueWords([...ENGLISH, ...strip(EN_WORDS)], 'en-core') },
+  { id: 'jp-passages', name: '長文練習', label: 'JP / LONG PRACTICE', kind: 'passage', words: uniqueWords(PASSAGES, 'jp-passages') },
 ];
 
 /** Stable across seeds, sessions and spelling preferences. */

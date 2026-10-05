@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Round, ROUND_MS } from './round';
-import type { Dictionary } from '../content/words';
+import { DICTIONARIES, type Dictionary } from '../content/words';
+import { normalizeReading } from '../engine/romaji';
 import type { Baselines } from '../stats/baselines';
 import { PatchSource, type Pick } from '../stats/select';
 import type { Vuln } from '../stats/types';
@@ -21,6 +22,53 @@ function typeKeys(r: Round, count: number, interval: (i: number) => number, star
 }
 
 describe('Round', () => {
+  it.each([0, 1, 2, 3])('finishes original passage %i once, without a 60-second cutoff or double-counted kana', index => {
+    const passages = DICTIONARIES.find(d => d.kind === 'passage')!;
+    const word = passages.words[index];
+    expect(word.display).toBe(word.segments!.map(s => s.display).join(''));
+    expect(word.reading).toBe(word.segments!.map(s => s.reading).join(''));
+    const r = new Round({ ...passages, words: [word] }, {}, { mode: 'passage', baselines: new Map(), seed: 1 });
+    const selected = r.word; // WordStream supplies an independent dictionary copy.
+    const guide = r.session.guide;
+    expect(guide.length).toBeGreaterThan(100);
+    for (let i = 0; i < guide.length; i++) {
+      expect(r.input(guide[i], i * 1000).accepted).toBe(true);
+      if (i === 80) { expect(r.finished).toBe(false); expect(r.remainingMs(i * 1000)).toBe(Infinity); }
+    }
+    expect(r.finished).toBe(true);
+    expect(r.word).toBe(selected);
+    expect(r.wordsDone).toBe(1);
+    expect(r.totalKana()).toBe(normalizeReading(word.reading).length);
+    expect(r.result().kanaPerSec).toBeCloseTo(normalizeReading(word.reading).length / (guide.length - 1));
+    expect(r.input('a', guide.length * 1000).late).toBe(true);
+    expect(r.log).toHaveLength(guide.length);
+  });
+
+  it('keeps a long-practice position through a miss and pause and saves a frozen partial duration', () => {
+    const r = new Round(dict('あいうえお'.repeat(20)), {}, { mode: 'passage', baselines: new Map() });
+    r.finish(10); expect(r.finished).toBe(false);
+    r.input('a', 0); r.input('?', 500); r.input('i', 1000);
+    const typed = r.session.typed; const kana = r.totalKana();
+    r.pause(2000); r.tick(200000, 100);
+    expect(r.session.typed).toBe(typed); expect(r.totalKana()).toBe(kana);
+    r.resume(200000); expect(r.input('u', 200100).accepted).toBe(true);
+    expect(r.log.at(-1)).toMatchObject({ afterPause: true, dt: NaN, wordStart: false });
+    expect(r.elapsedMs(200100)).toBe(2100);
+    r.pause(201000); r.finish(300000);
+    expect(r.endT).toBe(201000);
+    expect(r.result().kanaPerSec).toBeCloseTo(3 / 3);
+    expect(r.result().accuracy).toBe(0.75);
+    expect(r.session.complete).toBe(false);
+    expect(r.log[1].intended).toBe('i');
+  });
+
+  it('keeps explicit practice finish out of the normal benchmark clock', () => {
+    const r = new Round(dict('あいう'), {});
+    r.input('a', 0); r.finish(1000);
+    expect(r.finished).toBe(false);
+    r.tick(ROUND_MS, 0); expect(r.finished).toBe(true);
+  });
+
   it('freezes clock/input/trace while paused and excludes the next accepted key from timing', () => {
     const r = new Round(dict('あいう'), {}, { baselines: new Map(), seed: 7 });
     r.input('a', 0);
@@ -134,7 +182,7 @@ describe('Round', () => {
     expect(r.input('i', ROUND_MS + 2).late).toBe(true);
   });
 
-  it('reselects a buffered patch target invalidated by learning a spelling', () => {
+  it('keeps previewed word order and clears a patch target invalidated by learning a spelling', () => {
     const prefs = { 'し': 'si' };
     const words = Array.from({ length: 120 }, (_, i) => ({ display: `word-${i}`, reading: 'し' }));
     const dictionary = { ...dict('し'), words };
@@ -152,11 +200,29 @@ describe('Round', () => {
     r.input('h', 300);
     expect(r.input('i', 400).wordDone).toBe(true);
     expect(prefs['し']).toBe('shi');
-    expect(r.word).not.toBe(preview);
+    expect(r.word).toBe(preview);
     expect(r.currentPick).toMatchObject({ role: 'ordinary', target: null });
     expect(r.session.guide).toBe('shi');
     r.input('s', 500);
     expect(r.log.at(-1)).toMatchObject({ role: 'ordinary', target: null, wordId: r.currentPick.id });
+  });
+
+  it('advances both future words exactly in source order and does not consume previews on miss, pause or late keys', () => {
+    const words = ['か', 'き', 'く', 'け', 'こ'].map((reading, i) => ({ display: `word-${i}`, reading, id: `word-${i}` }));
+    let index = 0;
+    const source = { next: () => { const word = words[index++ % words.length]; return { word, id: word.id, role: 'ordinary' as const, target: null, prob: 0.2 }; } };
+    const r = new Round(dict(), {}, { source, baselines: new Map() });
+    let t = 0;
+    for (let i = 0; i < 10; i++) {
+      const next = r.nextWord, following = r.followingWord;
+      r.input('?', t++); r.pause(t++); r.input('a', t++); r.resume(t++);
+      expect(r.nextWord).toBe(next); expect(r.followingWord).toBe(following);
+      for (const key of r.session.guide) r.input(key, t++);
+      expect(r.word).toBe(next); expect(r.nextWord).toBe(following);
+    }
+    const next = r.nextWord, following = r.followingWord;
+    r.input('a', ROUND_MS + 1000);
+    expect(r.nextWord).toBe(next); expect(r.followingWord).toBe(following);
   });
 
   it('zero-length intervals do not poison overclock', () => {

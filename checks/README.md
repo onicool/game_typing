@@ -145,3 +145,30 @@ cross-tab writers remain unverified. Unit fixtures model request-success before
 transaction completion, which the earlier interrupted fixture got wrong; the
 original assertions are retained. All 172 unit cases and the production build
 passed, with the existing analysis performance threshold unchanged.
+
+Long practice and two future queue items are checked independently:
+
+```sh
+python checks/passage_queue_check.py http://127.0.0.1:5183 http://127.0.0.1:5187
+```
+
+The second URL serves the retained `ba597cf` build in
+`/tmp/game-typing-qa/passage-cycle/before-user-features/dist`. The check records
+actual same-seed/partial-input screenshots before and after the queue change at
+five sizes. It verifies readable fonts, wrapping, current-position visibility on
+resize, 12-word JP/EN queue order against saved word IDs, pause/retries/dictionary
+changes, original passage completion and partial finish, miss recovery, persistent
+practice-only records and complete reload equality. `fixtures.ts` is an audit-only
+route for source metadata. Results/screenshots stay under
+`/tmp/game-typing-qa/passage-cycle/`; no upload occurs.
+
+Round unit cases also type all four original passages beyond 60 seconds and
+check uncapped duration, completion counts and pause/partial finish. The buffered
+patch regression intentionally now preserves the shown word and clears an
+invalidated target instead of silently substituting another word; probe holdouts
+remain probes. No skip key or rhythm judgement was added. The final 179 unit cases
+and build passed. The initial new fixture compared a WordStream dictionary copy
+to the source object's identity; it now checks identity against the actually
+selected word. UI regressions caught and resolved the long-helper/footer overlap
+and readiness visibility. Physical input/paint, OS IME and other browsers remain
+unverified; the captures are preference evidence, not a controlled efficacy study.

@@ -70,6 +70,7 @@ function fit() {
   stage.style.setProperty('--input-width', `${Math.min(1800, Math.max(960, 720 / s))}px`);
   stage.classList.toggle('compact-input', inputBoost > 1.01);
   stage.classList.toggle('tight-input', s < 0.5);
+  if (round?.word.segments) renderPanel();
   scene.resize(s);
 }
 window.addEventListener('resize', fit);
@@ -106,6 +107,16 @@ let logLines: string[] = [];
 let errTimer = 0;
 let popTimer = 0;
 let nextWordCached: Round['nextWord'] | null = null;
+let followingWordCached: Round['followingWord'] | null = null;
+let panelWordCached: Round['word'] | null = null;
+
+function followPosition(container: HTMLElement, marker: HTMLElement | null) {
+  if (!marker) return;
+  const top = marker.offsetTop;
+  const bottom = top + marker.offsetHeight;
+  if (top < container.scrollTop) container.scrollTop = top;
+  else if (bottom > container.scrollTop + container.clientHeight) container.scrollTop = bottom - container.clientHeight;
+}
 
 function renderSound() {
   const unavailable = audio.enabled && audio.unavailable;
@@ -187,10 +198,33 @@ function renderPanel(miss = false) {
   const s = round.session;
   const w = round.word;
   const isJp = DICTIONARIES[dictIdx].id.startsWith('jp');
-  els.word.textContent = w.display;
+  const long = !!w.segments;
+  stage.classList.toggle('long-input', long);
+  $('passage-help').classList.toggle('hidden', !long);
+  if (panelWordCached !== w) {
+    panelWordCached = w;
+    if (w.segments) els.word.innerHTML = w.segments.map(segment => `<span>${esc(segment.display)}</span>`).join('');
+    else els.word.textContent = w.display;
+    for (const node of [els.word, els.reading, els.romaji]) node.scrollTop = 0;
+  }
+  if (w.segments) {
+    let end = 0;
+    let active = w.segments.length - 1;
+    w.segments.some((segment, index) => {
+      end += normalizeReading(segment.reading).length;
+      if (s.kanaDone < end) { active = index; return true; }
+      return false;
+    });
+    [...els.word.children].forEach((node, index) => {
+      node.classList.toggle('current-sentence', index === active);
+      node.classList.toggle('done', index < active);
+    });
+    followPosition(els.word, els.word.children[active] as HTMLElement);
+  }
   if (isJp) {
     const r = normalizeReading(w.reading);
-    els.reading.innerHTML = `<span class="done">${esc(r.slice(0, s.kanaDone))}</span>${esc(r.slice(s.kanaDone))}`;
+    const restReading = r.slice(s.kanaDone);
+    els.reading.innerHTML = `<span class="done">${esc(r.slice(0, s.kanaDone))}</span>${long ? `<span class="reading-unit"><span class="reading-cursor" aria-hidden="true"></span>${esc(restReading.slice(0, 1))}</span>${esc(restReading.slice(1))}` : esc(restReading)}`;
   } else {
     els.reading.textContent = '';
   }
@@ -198,19 +232,26 @@ function renderPanel(miss = false) {
   const rest = s.guide.slice(typed.length);
   const first = rest.slice(0, 1);
   const firstHtml = miss && first ? `<span class="err">${esc(first)}</span>` : esc(first);
-  els.romaji.innerHTML = `<span class="typed">${esc(typed)}</span><span class="cursor"></span>${firstHtml}${esc(rest.slice(1))}`;
+  els.romaji.innerHTML = `<span class="typed">${esc(typed)}</span><span class="current-unit"><span class="cursor"></span>${firstHtml}</span>${esc(rest.slice(1))}`;
+  if (long) {
+    followPosition(els.reading, els.reading.querySelector<HTMLElement>('.reading-unit'));
+    followPosition(els.romaji, els.romaji.querySelector<HTMLElement>('.current-unit'));
+  }
   const total = normalizeReading(w.reading).length;
   els.progressText.textContent = `${pad(s.kanaDone)} / ${pad(total)}`;
   els.progressBar.style.width = `${(s.kanaDone / total) * 100}%`;
   const pick = round.currentPick;
   // only weak-slot words are labelled; probes stay unmarked so they remain a fair check
-  els.inputLabel.textContent = `INPUT // ${pad(round.wordsDone + 1, 3)}${pick.role === 'weak' && pick.target ? `　◆ TARGET ${pick.target}` : ''}`;
-  if (nextWordCached !== round.nextWord) {
+  els.inputLabel.textContent = `${long ? 'LONG PRACTICE' : 'INPUT'} // ${pad(round.wordsDone + 1, 3)}${pick.role === 'weak' && pick.target ? `　◆ TARGET ${pick.target}` : ''}`;
+  if (nextWordCached !== round.nextWord || followingWordCached !== round.followingWord) {
     nextWordCached = round.nextWord;
+    followingWordCached = round.followingWord;
     els.nextWord.textContent = round.nextWord.display;
     els.nextGuide.textContent = isJp ? new TypingSession(round.nextWord.reading, { prefs }).guide : '';
+    $('following-word').textContent = round.followingWord.display;
+    $('following-guide').textContent = isJp ? new TypingSession(round.followingWord.reading, { prefs }).guide : '';
   }
-  els.readyHelp.classList.toggle('hidden', round.started);
+  els.readyHelp.classList.toggle('hidden', round.started || long);
 }
 
 function renderHud() {
@@ -254,9 +295,12 @@ function renderAccuracy() {
 function renderClock(now: number) {
   if (!round) return;
   const rem = round.remainingMs(now);
-  els.timer.textContent = round.started ? `RUN 00:${pad(Math.ceil(rem / 1000))}` : 'RUN 00:60 / 最初のキーでスタート';
-  els.timeBar.style.width = `${Math.max(0, Math.min(1, rem / ROUND_MS)) * 100}%`;
-  const elapsed = round.started ? (ROUND_MS - rem) / 1000 : 0;
+  const elapsed = round.elapsedMs(now) / 1000;
+  const passage = round.mode === 'passage';
+  els.timer.textContent = passage
+    ? round.started ? `PRACTICE ${pad(Math.floor(elapsed / 60))}:${pad(Math.floor(elapsed % 60))}` : 'PRACTICE / 最初のキーでスタート'
+    : round.started ? `RUN 00:${pad(Math.ceil(rem / 1000))}` : 'RUN 00:60 / 最初のキーでスタート';
+  els.timeBar.style.width = `${passage ? round.session.kanaDone / normalizeReading(round.word.reading).length * 100 : Math.max(0, Math.min(1, rem / ROUND_MS)) * 100}%`;
   els.kps.textContent = `${elapsed > 1 ? (round.totalKana() / elapsed).toFixed(1) : '0.0'} 字/秒`;
 }
 
@@ -277,6 +321,8 @@ function pauseRound(t: number) {
   $('pause-note').textContent = round.interrupted
     ? '時計と入力を停止しています。再開後は練習扱い（中断あり）になります。'
     : '最初のキーを打つ前の待機中です。Space / Enter で再開できます。';
+  $('pause-finish').classList.toggle('hidden', round.mode !== 'passage' || !round.started);
+  if (round.mode === 'passage') $('pause-note').textContent = '時計と入力を停止しています。途中でも「終了して記録を保存」で練習結果を残せます。タイトルへ戻ると未完了の入力は保存されません。';
   clearTimeout(errTimer);
   els.ime.classList.add('hidden');
   renderPanel();
@@ -307,6 +353,11 @@ $('open-settings').addEventListener('click', openSettings);
 $('close-settings').addEventListener('click', closeSettings);
 $('pause-trigger').addEventListener('click', () => pauseRound(performance.now()));
 $('pause-resume').addEventListener('click', () => resumeRound(performance.now()));
+$('pause-finish').addEventListener('click', () => {
+  if (round?.mode !== 'passage' || !round.started) return;
+  round.finish(performance.now());
+  endRound();
+});
 $('pause-retry').addEventListener('click', () => startRound(lastRun));
 $('pause-title-return').addEventListener('click', toTitle);
 
@@ -348,7 +399,7 @@ function closeReport() {
 }
 
 /** What a retry from the result/pause screen repeats: a benchmark, or a patch on the same focus. */
-let lastRun: { mode: 'benchmark' } | { mode: 'patch'; focus: string; dictId: string; vulns: Vuln[] } = { mode: 'benchmark' };
+let lastRun: { mode: 'benchmark' | 'passage' } | { mode: 'patch'; focus: string; dictId: string; vulns: Vuln[] } = { mode: 'benchmark' };
 
 function startPatch(index: number) {
   if (mode !== 'report' || !report || report.dictId !== DICTIONARIES[dictIdx].id || report.request !== reportRequest) return;
@@ -363,9 +414,14 @@ function startPatch(index: number) {
 function renderTitle() {
   const d = DICTIONARIES[dictIdx];
   $('dict-name').textContent = d.name;
+  const passage = d.kind === 'passage';
+  $('title-intro').textContent = passage ? '一つの文章を最後まで打つ、時間制限のない長文練習。' : '60 秒間、防壁を打ち破れ。単語を打ち切るたびに防壁の層が砕ける。';
+  $('title-help').innerHTML = passage
+    ? '読みとローマ字が入力位置に追従します。句読点は , と . で入力。ミスは打ち直し（Backspace不要）。<br /><span class="muted">Esc で中断・再開、途中終了して保存も可。60秒ベンチマークの自己ベストとは別の練習記録です。</span>'
+    : '表示されたローマ字を打つ。単語は自動で進む。ミスは打ち直し（Backspace不要）。語末の『ん』は nn。<br /><span class="muted">shi / si どちらでも可　・　最初のキーでスタート</span>';
   els.modeLabel.textContent = `${d.label}　|　IME OFF`;
   const best = store.get(`pb.${d.id}`, 0, isNonNegativeNumber);
-  $('title-best').textContent = best ? `自己ベスト ${best.toFixed(2)} 字/秒` : '';
+  $('title-best').textContent = !passage && best ? `自己ベスト ${best.toFixed(2)} 字/秒` : '';
   renderSound();
 }
 
@@ -383,8 +439,8 @@ function startRound(run: typeof lastRun = { mode: 'benchmark' }) {
       round = new Round(dict, prefs, { baselines, seed });
     }
   } else {
-    run = { mode: 'benchmark' };
-    round = new Round(dict, prefs, { baselines, seed });
+    run = { mode: dict.kind === 'passage' ? 'passage' : 'benchmark' };
+    round = new Round(dict, prefs, { mode: run.mode, baselines, seed });
   }
   lastRun = run;
   const d0 = DICTIONARIES[dictIdx];
@@ -392,6 +448,11 @@ function startRound(run: typeof lastRun = { mode: 'benchmark' }) {
   mode = 'play';
   settingsOpen = false;
   nextWordCached = null;
+  followingWordCached = null;
+  panelWordCached = null;
+  els.readyHelp.innerHTML = run.mode === 'passage'
+    ? '時間制限なしの長文練習。句読点は , と . で入力。<br /><span class="muted">最初のキーで時計が動く。Esc で中断・再開、途中終了して記録保存も可。</span>'
+    : '表示されたローマ字を打つ。単語は自動で進む。ミスは打ち直し（Backspace不要）。語末の『ん』は nn。<br /><span class="muted">shi / si どちらでも可　・　最初のキーでスタート</span>';
   clearTimeout(errTimer);
   clearTimeout(popTimer);
   els.chainPop.classList.remove('visible');
@@ -411,6 +472,15 @@ function startRound(run: typeof lastRun = { mode: 'benchmark' }) {
   renderClock(performance.now());
 }
 
+$('start-passage').addEventListener('click', () => {
+  dictIdx = DICTIONARIES.findIndex(dict => dict.kind === 'passage');
+  store.set('dict', dictIdx);
+  reportRequest++;
+  report = null;
+  renderTitle();
+  startRound({ mode: 'passage' });
+});
+
 function endRound() {
   if (!round) return;
   const completedRound = round;
@@ -422,9 +492,10 @@ function endRound() {
   const d = DICTIONARIES[dictIdx];
   const r: RoundResult = round.result();
   const isPatch = round.mode === 'patch';
+  const isPassage = round.mode === 'passage';
   const interrupted = round.interrupted;
-  const sessionMode = isPatch ? 'patch' : interrupted ? 'practice' : 'benchmark';
-  const eligibleForBest = !interrupted && !isPatch;
+  const sessionMode = isPatch ? 'patch' : interrupted || isPassage ? 'practice' : 'benchmark';
+  const eligibleForBest = !interrupted && !isPatch && !isPassage;
   const pbKey = `pb.${d.id}`;
   const best = store.get(pbKey, 0, isNonNegativeNumber);
   if (eligibleForBest && r.kanaPerSec > best) store.set(pbKey, r.kanaPerSec);
@@ -462,7 +533,7 @@ function endRound() {
     });
 
   $('r-title').textContent = isPatch ? '[ PATCH COMPLETE ]' : '[ RUN COMPLETE ]';
-  $('r-mode').textContent = isPatch ? `パッチ練習${interrupted ? '（中断あり）' : ''}` : interrupted ? '練習扱い（中断あり）' : '60秒ベンチマーク';
+  $('r-mode').textContent = isPatch ? `パッチ練習${interrupted ? '（中断あり）' : ''}` : isPassage ? `長文練習${round.session.complete ? '（完了）' : '（途中終了）'}${interrupted ? '・中断あり' : ''}` : interrupted ? '練習扱い（中断あり）' : '60秒ベンチマーク';
 
   $('r-speed').innerHTML = `${r.kanaPerSec.toFixed(2)}<small style="font-size:22px"> 字/秒</small>`;
   $('r-kpm').textContent = `${Math.round(r.keysPerMin)} 打鍵/分（参考）`;
@@ -640,6 +711,7 @@ window.addEventListener('keydown', (e) => {
   renderHud();
   renderAccuracy();
   renderClock(e.timeStamp);
+  if (round.finished) endRound();
 });
 
 window.addEventListener('blur', (e) => pauseRound(e.timeStamp));

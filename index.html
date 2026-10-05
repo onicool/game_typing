@@ -79,7 +79,11 @@
         <div class="time-track" aria-hidden="true"><i id="time-bar"></i></div>
         <div class="input-head">
           <span class="input-label" id="input-label">INPUT // 001</span>
-          <span class="next">NEXT <span class="jp" id="next-word"></span><span id="next-guide"></span></span>
+          <span class="passage-help jp hidden" id="passage-help">時間制限なし · 句読点は , と . · Esc で中断・途中保存</span>
+          <div class="next" aria-label="次に打つ2件">
+            <div class="queue-item"><span class="queue-label">NEXT 1</span><span class="jp" id="next-word"></span><span id="next-guide"></span></div>
+            <div class="queue-item"><span class="queue-label">NEXT 2</span><span class="jp" id="following-word"></span><span id="following-guide"></span></div>
+          </div>
         </div>
         <div class="input-body">
           <div class="word jp" id="word"></div>
@@ -109,13 +113,14 @@
         <div class="ov-box">
           <div class="eyebrow">ICEBREAKER // PROTOTYPE P0</div>
           <h1>打鍵で、電脳を割れ。</h1>
-          <p class="jp muted">60 秒間、防壁を打ち破れ。単語を打ち切るたびに防壁の層が砕ける。</p>
-          <p class="jp start-help">表示されたローマ字を打つ。単語は自動で進む。ミスは打ち直し（Backspace不要）。語末の『ん』は nn。<br /><span class="muted">shi / si どちらでも可　・　最初のキーでスタート</span></p>
+          <p class="jp muted" id="title-intro">60 秒間、防壁を打ち破れ。単語を打ち切るたびに防壁の層が砕ける。</p>
+          <p class="jp start-help" id="title-help">表示されたローマ字を打つ。単語は自動で進む。ミスは打ち直し（Backspace不要）。語末の『ん』は nn。<br /><span class="muted">shi / si どちらでも可　・　最初のキーでスタート</span></p>
           <div class="ov-options">
             <span>辞書 <kbd>D</kbd> <b id="dict-name">日本語</b></span>
             <span>音声 <kbd>M</kbd></span>
             <span>脆弱性レポート <kbd>R</kbd></span>
             <button type="button" id="open-settings">設定 <kbd>S</kbd></button>
+            <button type="button" id="start-passage">長文練習</button>
           </div>
           <div class="ov-start"><kbd>SPACE</kbd> DIVE</div>
           <div class="ov-best muted" id="title-best"></div>
@@ -146,7 +151,7 @@
           <div class="eyebrow">[ LINK SUSPENDED ]</div>
           <h1 id="pause-title">一時停止</h1>
           <p class="jp muted" id="pause-note">時計と入力を停止しています。</p>
-          <div class="pause-actions jp"><button type="button" id="pause-resume"><kbd>SPACE / ENTER</kbd> 再開</button><button type="button" id="pause-retry"><kbd>R</kbd> やり直し</button><button type="button" id="pause-title-return"><kbd>Q / ESC</kbd> タイトルへ</button></div>
+          <div class="pause-actions jp"><button type="button" id="pause-resume"><kbd>SPACE / ENTER</kbd> 再開</button><button type="button" id="pause-retry"><kbd>R</kbd> やり直し</button><button type="button" id="pause-title-return"><kbd>Q / ESC</kbd> タイトルへ</button><button type="button" id="pause-finish" class="hidden">終了して記録を保存</button></div>
         </div>
       </section>
 

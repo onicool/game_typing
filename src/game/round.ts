@@ -5,7 +5,7 @@ import { loadBaselines, type Baselines } from '../stats/baselines';
 
 export interface WordSource { next(): Pick }
 export interface RoundOptions {
-  mode?: 'benchmark' | 'patch';
+  mode?: 'benchmark' | 'patch' | 'passage';
   source?: WordSource;
   baselines?: Baselines;
   seed?: number;
@@ -68,7 +68,7 @@ const median = (xs: number[]) => {
 };
 
 export class Round {
-  readonly mode: 'benchmark' | 'patch';
+  readonly mode: 'benchmark' | 'patch' | 'passage';
   readonly seed: number;
   readonly log: KeyLog[] = [];
   startT: number | null = null;
@@ -77,6 +77,7 @@ export class Round {
   word!: Word;
   session!: TypingSession;
   nextWord!: Word;
+  followingWord!: Word;
 
   chain = 0;
   maxChain = 0;
@@ -96,6 +97,7 @@ export class Round {
   /** Provenance of the word being typed (role/target), for display. */
   get currentPick(): Pick { return this.pick; }
   private nextPick: Pick;
+  private followingPick: Pick;
   private pausedAt: number | null = null;
   private pausedMs = 0;
   private wasInterrupted = false;
@@ -126,8 +128,10 @@ export class Round {
     this.foldCase = dict.id.startsWith('jp');
     this.pick = this.source.next();
     this.nextPick = this.source.next();
+    this.followingPick = this.source.next();
     this.word = this.pick.word;
     this.nextWord = this.nextPick.word;
+    this.followingWord = this.followingPick.word;
     this.session = new TypingSession(this.word.reading, { prefs });
   }
 
@@ -151,24 +155,31 @@ export class Round {
     this.afterPausePending = true;
   }
 
-  private elapsedMs(now: number): number {
+  elapsedMs(now: number): number {
     if (this.startT === null) return 0;
     return Math.max(0, (this.endT ?? this.pausedAt ?? now) - this.startT - this.pausedMs);
   }
 
   private checkDeadline(now: number): void {
+    if (this.mode === 'passage') return;
     if (!this.paused && this.started && !this.finished && this.elapsedMs(now) >= ROUND_MS) {
       this.endT = this.startT! + this.pausedMs + ROUND_MS;
     }
   }
 
   remainingMs(now: number) {
+    if (this.mode === 'passage') return Infinity;
     return Math.max(0, ROUND_MS - this.elapsedMs(now));
+  }
+
+  /** Explicit practice finish also preserves the frozen clock while paused. */
+  finish(t: number): void {
+    if (this.mode === 'passage' && this.started && !this.finished) this.endT = this.pausedAt ?? t;
   }
 
   accuracy(): number { return this.correct + this.misses ? this.correct / (this.correct + this.misses) : 1; }
 
-  totalKana() { return this.kanaDone + this.session.kanaDone; }
+  totalKana() { return this.kanaDone + (this.mode === 'passage' && this.session.complete ? 0 : this.session.kanaDone); }
 
   /** Integrity of the current firewall, 1 = intact. */
   integrity() {
@@ -271,14 +282,18 @@ export class Round {
         this.firewalls++;
         out.firewallDone = true;
       }
+      if (this.mode === 'passage') { this.endT = t; return out; }
       this.pick = this.nextPick;
-      // The preview was selected before this word taught us a new spelling.
+      // Keep the promised word order. Learning a spelling can invalidate a
+      // buffered target, but must not swap a word the player already previewed.
       if (this.pick.target && !targetsInWord(this.pick.word.reading, this.prefs).includes(this.pick.target)) {
-        this.pick = this.source.next();
+        this.pick = { ...this.pick, role: this.pick.role === 'probe' ? 'probe' : 'ordinary', target: null };
       }
-      this.nextPick = this.source.next();
+      this.nextPick = this.followingPick;
+      this.followingPick = this.source.next();
       this.word = this.pick.word;
       this.nextWord = this.nextPick.word;
+      this.followingWord = this.followingPick.word;
       this.session = new TypingSession(this.word.reading, { prefs: this.prefs });
       this.wordStartPending = true;
       this.lastKey = null; // No cross-word transitions, even for downstream legacy consumers.
@@ -335,7 +350,8 @@ export class Round {
   }
 
   result(): RoundResult {
-    const elapsed = Math.min(ROUND_MS, this.elapsedMs(performance.now())) / 1000 || 1;
+    const duration = this.elapsedMs(performance.now());
+    const elapsed = (this.mode === 'passage' ? duration : Math.min(ROUND_MS, duration)) / 1000 || 1;
     const clean = this.log.filter((e) => e.correct && !e.wordStart && !e.afterMiss && !e.afterPause && isTiming(e.dt) && e.dt < 2000);
     const overall = median(clean.map((e) => e.dt));
     const groups = new Map<string, number[]>();
