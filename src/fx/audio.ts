@@ -29,17 +29,29 @@ export class Audio {
   private progressionIdx = 0;
   private _enabled = true;
   private _volume = DEFAULT_VOLUME;
+  private failed = false;
+  private resuming: AudioContext | null = null;
+  onAvailabilityChange?: () => void;
+
+  get unavailable(): boolean { return this.failed; }
 
   get enabled(): boolean { return this._enabled; }
   set enabled(enabled: boolean) {
+    // A deliberate off → on gesture retries; typing must never retry a failed
+    // device on every key or change the user's saved sound preference.
+    if (enabled && !this._enabled && this.failed) {
+      this.failed = false;
+      this._enabled = enabled;
+      this.onAvailabilityChange?.();
+    }
     this._enabled = enabled;
-    this.rampMaster();
+    this.play(() => this.rampMaster());
   }
 
   get volume(): number { return this._volume; }
   setVolume(v: number) {
     this._volume = Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0;
-    this.rampMaster();
+    this.play(() => this.rampMaster());
   }
 
   private rampMaster() {
@@ -58,42 +70,81 @@ export class Audio {
 
   /** Must be called from a user gesture (first keydown). */
   ensure() {
-    if (this.ctx) {
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
-      return;
+    if (!this.enabled || this.volume === 0 || this.failed) return;
+    try {
+      if (this.ctx?.state === 'closed') this.ctx = null;
+      if (!this.ctx) this.initialize();
+      const ctx = this.ctx!;
+      if (ctx.state !== 'running' && this.resuming !== ctx) {
+        this.resuming = ctx;
+        void ctx.resume().catch(() => this.fail(ctx)).finally(() => {
+          if (this.resuming === ctx) this.resuming = null;
+        });
+      }
+    } catch {
+      this.fail(this.ctx);
     }
+  }
+
+  private initialize() {
     const ctx = new AudioContext({ latencyHint: 'interactive' });
-    this.ctx = ctx;
+    try {
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -14;
+      comp.ratio.value = 4;
+      comp.connect(ctx.destination);
 
-    const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -14;
-    comp.ratio.value = 4;
-    comp.connect(ctx.destination);
+      this.master = ctx.createGain();
+      this.master.gain.value = this._enabled ? this._volume * MASTER_GAIN : 0;
+      this.master.connect(comp);
 
-    this.master = ctx.createGain();
-    this.master.gain.value = this._enabled ? this._volume * MASTER_GAIN : 0;
-    this.master.connect(comp);
+      // feedback delay for a little neon space
+      const delay = ctx.createDelay(1);
+      delay.delayTime.value = 0.19;
+      const fb = ctx.createGain();
+      fb.gain.value = 0.32;
+      const tone = ctx.createBiquadFilter();
+      tone.type = 'lowpass';
+      tone.frequency.value = 2600;
+      this.delaySend = ctx.createGain();
+      this.delaySend.gain.value = 0.22;
+      this.delaySend.connect(delay);
+      delay.connect(tone);
+      tone.connect(fb);
+      fb.connect(delay);
+      tone.connect(this.master);
 
-    // feedback delay for a little neon space
-    const delay = ctx.createDelay(1);
-    delay.delayTime.value = 0.19;
-    const fb = ctx.createGain();
-    fb.gain.value = 0.32;
-    const tone = ctx.createBiquadFilter();
-    tone.type = 'lowpass';
-    tone.frequency.value = 2600;
-    this.delaySend = ctx.createGain();
-    this.delaySend.gain.value = 0.22;
-    this.delaySend.connect(delay);
-    delay.connect(tone);
-    tone.connect(fb);
-    fb.connect(delay);
-    tone.connect(this.master);
+      const len = ctx.sampleRate * 1;
+      this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = this.noise.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      // Publish only a complete graph. A failed allocation cannot leave a half
+      // initialised context behind for volume changes or the next key.
+      this.ctx = ctx;
+    } catch (error) {
+      this.close(ctx);
+      throw error;
+    }
+  }
 
-    const len = ctx.sampleRate * 1;
-    this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = this.noise.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  private close(ctx: AudioContext) {
+    try { void ctx.close().catch(() => {}); } catch { /* already unavailable */ }
+  }
+
+  private fail(ctx: AudioContext | null) {
+    if (ctx && ctx !== this.ctx) return; // Ignore an obsolete resume rejection.
+    this.ctx = null;
+    this.resuming = null;
+    if (ctx) this.close(ctx);
+    if (!this.failed) {
+      this.failed = true;
+      this.onAvailabilityChange?.();
+    }
+  }
+
+  private play(effect: () => void) {
+    const ctx = this.ctx;
+    try { effect(); } catch { this.fail(ctx); }
   }
 
   reset() {
@@ -104,6 +155,10 @@ export class Audio {
 
   /** Accepted keystroke. stage = overclock 0..3 */
   key(stage: number, critical: boolean) {
+    this.play(() => this.synthKey(stage, critical));
+  }
+
+  private synthKey(stage: number, critical: boolean) {
     const ctx = this.live();
     if (!ctx) return;
     const t = ctx.currentTime;
@@ -158,6 +213,10 @@ export class Audio {
   }
 
   miss() {
+    this.play(() => this.synthMiss());
+  }
+
+  private synthMiss() {
     const ctx = this.live();
     if (!ctx) return;
     const t = ctx.currentTime;
@@ -176,6 +235,10 @@ export class Audio {
 
   /** Word completed: advance the progression and play the accompaniment layers. */
   word(stage: number) {
+    this.play(() => this.synthWord(stage));
+  }
+
+  private synthWord(stage: number) {
     const ctx = this.live();
     if (!ctx) return;
     const t = ctx.currentTime;
@@ -198,6 +261,10 @@ export class Audio {
 
   /** Whole firewall destroyed. */
   breach() {
+    this.play(() => this.synthBreach());
+  }
+
+  private synthBreach() {
     // Advance even while muted so the music still follows gameplay.
     this.progressionIdx = (this.progressionIdx + 1) % PROGRESSIONS.length;
     this.chordIdx = 0;
@@ -210,7 +277,7 @@ export class Audio {
   }
 
   private live(): AudioContext | null {
-    return this.enabled && this.ctx ? this.ctx : null;
+    return this.enabled && this.volume > 0 && this.ctx?.state === 'running' ? this.ctx : null;
   }
 
   private voice(t: number, type: OscillatorType, freq: number, dur: number, vol: number, cutoff: number, send = false) {

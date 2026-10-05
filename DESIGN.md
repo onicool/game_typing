@@ -290,6 +290,7 @@ type KeystrokeEvent = {
 ### 7.3 音
 - シンセウェーブ／テクノ系。WebAudio。打鍵音はシンセで生成（素材ライセンス不要）し、事前に用意しておいて打鍵時は再生だけ。
 - BGMは楽器ごとに分割（ステム）し、オーバークロック段階に応じて重ねる。
+- 音声は任意のフィードバックとして扱い、初期化・再生・復帰の失敗で入力や保存を止めない。利用不可は既存の音声操作に表示し、設定値は保持する。失敗時の再試行はオフ→オン操作に限定する。[AudioContext.resume()](https://developer.mozilla.org/en-US/docs/Web/API/AudioContext/resume) の Promise を処理し、復帰待ちは重複させない。[状態](https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/state)が running になるまでは打鍵音を予約しない。実機の音声中断・OS スリープ確認は未実施。
 
 ### 7.4 アクセシビリティ
 - 加速・画面シェイク・点滅・グリッチ・走査線は、それぞれ個別に強度を調整／オフ可能。

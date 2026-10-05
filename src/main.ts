@@ -108,16 +108,18 @@ let popTimer = 0;
 let nextWordCached: Round['nextWord'] | null = null;
 
 function renderSound() {
-  els.sound.textContent = audio.enabled ? '[ 音声 ON ]' : '[ 音声 OFF ]';
-  els.soundIcon.textContent = audio.enabled && audio.volume > 0 ? '🔊' : '🔇';
+  const unavailable = audio.enabled && audio.unavailable;
+  els.sound.textContent = unavailable ? '[ 音声 利用不可 ]' : audio.enabled ? '[ 音声 ON ]' : '[ 音声 OFF ]';
+  els.soundIcon.textContent = audio.enabled && !unavailable && audio.volume > 0 ? '🔊' : '🔇';
   els.soundToggle.setAttribute('aria-pressed', String(!audio.enabled));
-  els.soundToggle.setAttribute('aria-label', audio.enabled ? '音声をミュート' : '音声をオン');
+  els.soundToggle.setAttribute('aria-label', unavailable ? '音声をミュート（現在利用不可。オフからオンにすると再試行）' : audio.enabled ? '音声をミュート' : '音声をオン');
   els.volume.value = String(audio.volume);
 }
+audio.onAvailabilityChange = renderSound;
 
 function toggleSound() {
-  audio.ensure();
   audio.enabled = !audio.enabled;
+  audio.ensure();
   store.set('sound', audio.enabled);
   renderSound();
 }
@@ -128,8 +130,8 @@ els.soundToggle.addEventListener('click', (e) => {
   if (e.detail > 0) els.soundToggle.blur();
 });
 els.volume.addEventListener('input', () => {
-  audio.ensure();
   audio.setVolume(Number(els.volume.value));
+  audio.ensure();
   store.set('volume', audio.volume);
   renderSound();
 });

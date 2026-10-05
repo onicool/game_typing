@@ -95,3 +95,26 @@ and preservation of damaged original settings are checked. Outputs are in
 The renderer remains Canvas2D; WebGL/Three.js was not implemented. No real
 driver/context-loss event, physical input/display or paint latency, cold-start
 budget, spoken accessibility, or Safari/Firefox measurement was performed.
+
+Optional-audio resilience can be checked separately without rerunning graphics:
+
+```sh
+npm test -- --maxWorkers=1
+npm run build
+# Run the local preview, then in another terminal:
+python checks/audio_check.py http://127.0.0.1:5179
+python checks/keyboard_check.py http://127.0.0.1:5179
+```
+
+Nine fresh contexts cover normal/muted audio, missing/throwing constructors,
+graph/node/gain faults, a rejected resume, and a closed context. Each types the
+same seeded 34-key sequence, injects blur/hidden events, resumes via native modal
+keyboard focus, saves an interrupted practice round and reloads. Key fields match
+the normal condition exactly, with a single after-pause event, no page errors,
+and unchanged sound preferences except deliberate controls. Three recoverable
+faults also verify an explicit off → on retry. Results and the small-window
+failure-notice screenshot are in `/tmp/game-typing-qa/audio-cycle/`.
+These are artificial failures, not physical audio-device, OS sleep, sound
+listening or cross-browser tests. The existing 300 ms analysis unit gate is
+sensitive to shared-host contention: the initial parallel run took 325.92 ms;
+the full 159-test run passed serially. No threshold was relaxed.
