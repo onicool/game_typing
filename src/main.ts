@@ -409,10 +409,21 @@ function endRound() {
   const session = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   const events: StoredKey[] = round.log.map((e) => ({ ...e, session, mode: sessionMode, dict: d.id }));
   const meta = { session, dict: d.id, mode: sessionMode, kanaPerSec: r.kanaPerSec, accuracy: r.accuracy, endedAt: Date.now() };
+  const saveState = $('session-save-state');
+  saveState.textContent = '今回の練習記録を保存中…';
   $('recent-sessions').textContent = '直近5セッションを読み込み中…';
   void saveSession(events, meta)
-    .catch((err) => console.warn('failed to save session', err))
-    .then(async () => {
+    .catch((err) => {
+      console.warn('failed to save session', err);
+      return 'unknown' as const;
+    })
+    .then(async (savedTo) => {
+      if (round !== completedRound) return;
+      saveState.textContent = savedTo === 'persistent'
+        ? '今回の練習記録をこのブラウザに保存しました。'
+        : savedTo === 'memory'
+          ? '今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。'
+          : '今回の練習記録の保存状態を確認できませんでした。';
       const sessions = await loadSessions(d.id);
       if (round !== completedRound) return;
       // Include the current result even if persistent storage is unavailable.
@@ -437,7 +448,7 @@ function endRound() {
   $('r-layers').textContent = `破った層 ${r.layers} / 防壁 ${r.firewalls}`;
 
   const near = $('r-near');
-  if (!eligibleForBest) near.innerHTML = best ? `ベスト <b>${best.toFixed(2)} 字/秒</b>　・　${isPatch ? 'パッチ' : '練習'}結果は自己ベストの対象外` : '練習結果を保存しました。自己ベストはベンチマークで記録します。';
+  if (!eligibleForBest) near.innerHTML = best ? `ベスト <b>${best.toFixed(2)} 字/秒</b>　・　${isPatch ? 'パッチ' : '練習'}結果は自己ベストの対象外` : 'この練習結果は自己ベストの対象外です。自己ベストはベンチマークで記録します。';
   else if (!best) near.innerHTML = `初回記録 <b>${r.kanaPerSec.toFixed(2)} 字/秒</b>。ここから自分を超えていく。`;
   else if (r.kanaPerSec > best) near.innerHTML = `<b>自己ベスト更新</b>　+${(r.kanaPerSec - best).toFixed(2)} 字/秒（前回ベスト ${best.toFixed(2)}）`;
   else if (r.kanaPerSec === best) near.innerHTML = `<b>自己ベストタイ</b>　${best.toFixed(2)} 字/秒`;

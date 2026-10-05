@@ -151,6 +151,7 @@ kbd { border: 1px solid #2c434e; padding: 3px 7px; margin-right: 6px; color: #9a
 .vuln { margin-top: 14px; padding: 14px 20px; border-left: 3px solid var(--pink); background: #170d16; font-size: 15px; color: #e7c9dc; }
 .vuln code { font-family: var(--mono); color: var(--pink); }
 .result-mode { font-size: 14px; margin-top: 10px; color: var(--muted); }
+.session-save-state { font-size: calc(14px * var(--text-boost)); margin-top: 10px; line-height: 1.6; color: var(--text); overflow-wrap: anywhere; }
 .result.ov-box { width: 1000px; padding: 36px 48px; }
 .result .ov-start { font-size: 16px; letter-spacing: 2px; margin-top: 24px; }
 .result .nearmiss { margin-top: 22px; }

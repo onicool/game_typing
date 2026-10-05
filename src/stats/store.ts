@@ -9,6 +9,8 @@ type SessionMeta = {
   endedAt: number;
 };
 interface EventRecord { session: string; dict: string; endedAt: number; events: StoredKey[] }
+/** A persistent result is returned only after both stores commit. */
+export type SessionSaveStatus = 'persistent' | 'memory';
 const memory = new Map<string, { meta: SessionMeta; record: EventRecord }>();
 let database: Promise<IDBDatabase | null> | undefined;
 
@@ -46,7 +48,7 @@ function copyEvents(events: StoredKey[]): StoredKey[] {
 
 export async function saveSession(events: StoredKey[], meta: {
   session: string; dict: string; mode: string; kanaPerSec: number; accuracy: number; endedAt: number;
-}): Promise<void> {
+}): Promise<SessionSaveStatus> {
   // Retain every save in memory too: quota, privacy restrictions, or a closed
   // connection can fail after opening. A retry replaces a session, never doubles it.
   const savedMeta = { ...meta };
@@ -56,7 +58,7 @@ export async function saveSession(events: StoredKey[], meta: {
   memory.set(meta.session, { meta: savedMeta, record });
   try {
     const db = await openDatabase();
-    if (!db) return;
+    if (!db) return 'memory';
     await new Promise<void>((resolve, reject) => {
       // Metadata and all raw events are committed together at round end.
       const transaction = db.transaction(['events', 'sessions'], 'readwrite');
@@ -71,7 +73,11 @@ export async function saveSession(events: StoredKey[], meta: {
         reject(error);
       }
     });
-  } catch { /* The complete session is already available in memory. */ }
+    return 'persistent';
+  } catch {
+    // The complete session is still available until this page is closed/reloaded.
+    return 'memory';
+  }
 }
 
 async function readRecords<T>(name: string, dict?: string): Promise<T[]> {
