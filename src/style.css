@@ -128,6 +128,7 @@ kbd { border: 1px solid #2c434e; padding: 3px 7px; margin-right: 6px; color: #9a
 .sound-control-help { font-size: 0.9em; letter-spacing: 0; }
 .overlay-open .sound-control-help { display: none; }
 .modal-open .footer { opacity: 0.4; }
+.modal-open #settings-storage-state { display: none; }
 #input-panel:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
 .overlay-open .footer-controls > :first-child, .overlay-open .footer .center, .overlay-open .footer > .signal { visibility: hidden; }
 
@@ -172,6 +173,7 @@ kbd { border: 1px solid #2c434e; padding: 3px 7px; margin-right: 6px; color: #9a
 .pause-actions { display: flex; flex-wrap: wrap; gap: 24px; font-size: calc(16px * var(--text-boost)); margin-top: 32px; }
 .settings-box { width: 680px; }
 .settings-box .ov-options { font-size: calc(14px * var(--text-boost)); overflow-wrap: anywhere; }
+.settings-save-state { margin: 0 0 18px; padding: 10px 12px; border-left: 2px solid var(--amber); font-size: calc(14px * var(--text-boost)); line-height: 1.6; color: var(--text); overflow-wrap: anywhere; }
 .settings-options { display: grid; gap: 12px; }
 .settings-options button { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 16px 20px; font: inherit; font-size: 18px; color: var(--text); border: 1px solid #2a4a52; background: #0b1a20; cursor: pointer; }
 .settings-options button:hover { border-color: var(--cyan); }

@@ -45,3 +45,23 @@ headless Chromium context. The rAF callback is
 not a paint measurement. Browser automation, shared-machine load, headless
 rendering, timer precision, and instrumentation affect these numbers; they are
 not physical keyboard-to-display latency or a product performance guarantee.
+
+The fourth-cycle audits are saved for resumption after higher-priority work:
+
+```sh
+python checks/quality_audit.py
+python checks/timing_audit.py
+```
+
+The quality audit builds the audit-only `fixtures.ts` with the existing Vite
+installation into `/tmp`, then routes that public-source fixture into fresh
+browser contexts. It checks five sizes, actual longest dictionary guides,
+error/retry/repeat paths, AX names/references/live status, and isolated long-text
+engine stress. It never uses an existing browser profile. Spoken screen-reader
+behavior remains unconfirmed; paragraph UI is not part of the current product.
+
+The timing audit compares blank/idle/typing, a test-only bypass of the app's RAF
+callback (scene and clock), and deliberately injected CPU load. It runs serially
+with two repeats and writes diagnostic JSON, without enforcing a latency budget.
+Shared-host load, browser automation, and rendering affect results. It does not
+measure paint or device latency and cannot by itself establish a product defect.

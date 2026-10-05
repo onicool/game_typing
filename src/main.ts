@@ -16,13 +16,18 @@ import { createSettingsStore, isBoolean, isDictionaryIndex, isEffectLevel, isNon
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const store = createSettingsStore(issue => {
-  const notice = $('settings-storage-state');
-  notice.textContent = issue === 'invalid'
+  const text = issue === 'invalid'
     ? '保存設定の一部を読み込めません。一時設定で動作しています。元の保存内容は保持しています。'
     : issue === 'unavailable'
       ? '設定の読み込み・保存ができないため、このページ内でのみ設定を保持します。'
       : '';
-  notice.classList.toggle('hidden', issue === null);
+  // Hidden/inert regions do not reach the accessibility tree. Keep the modal's
+  // own status in sync, and avoid announcing unchanged messages repeatedly.
+  for (const id of ['settings-storage-state', 'settings-save-state']) {
+    const notice = $(id);
+    if (notice.textContent !== text) notice.textContent = text;
+    notice.classList.toggle('hidden', issue === null);
+  }
 });
 
 const stage = $('stage');

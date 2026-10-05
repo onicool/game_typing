@@ -150,11 +150,12 @@
         </div>
       </section>
 
-      <section class="overlay hidden" id="settings-screen" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-describedby="settings-help" tabindex="-1">
+      <section class="overlay hidden" id="settings-screen" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-describedby="settings-help settings-save-state" tabindex="-1">
         <div class="ov-box settings-box">
           <div class="eyebrow">[ EFFECT SETTINGS ]</div>
           <h1 id="settings-title">演出設定</h1>
           <p class="jp muted" id="settings-help">Tab で移動、Space / Enter で変更。オフ / 弱 / 標準を切り替えます。</p>
+          <div class="settings-save-state jp hidden" id="settings-save-state" role="status" aria-live="polite"></div>
           <div class="settings-options jp">
             <button type="button" data-effect="shake"><span><kbd>1</kbd> 画面の揺れ</span><b id="setting-shake">標準</b></button>
             <button type="button" data-effect="flash"><span><kbd>2</kbd> フラッシュ</span><b id="setting-flash">標準</b></button>
