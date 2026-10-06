@@ -1,0 +1,22 @@
+/* Original temporary vector rig. All effects clip inside the center arena.
+   No transforms or overlays on typing, previews, meters, speech or HUD. */
+#angel-ui-studio .av-machine-arena { min-width:0; overflow:hidden; }
+#angel-ui-studio .av-machine-arena #seal,
+#angel-ui-studio .av-machine-arena #spell { display:none; }
+#angel-ui-studio .av-combat-scene {
+  width:min(100%,480px); height:180px; flex:none;
+  contain:layout paint; overflow:hidden; pointer-events:none;
+}
+#angel-ui-studio .av-combat-vector { display:block; width:100%; height:100%; }
+#angel-ui-studio .av-machine-arena .av-obstacle-note {
+  min-height:20px; max-width:100%; margin-top:5px; font-size:11px;
+  letter-spacing:.02em; text-align:center; color:#f7efd9;
+  padding:2px 8px; border-radius:4px; background:#0d2237d9;
+}
+@media(max-height:650px) and (min-width:621px) {
+  #angel-ui-studio .av-combat-scene { height:96px; }
+  #angel-ui-studio .av-machine-arena .av-obstacle-note { font-size:10px; }
+}
+@media(max-width:620px) {
+  #angel-ui-studio .av-combat-scene { height:136px; }
+}

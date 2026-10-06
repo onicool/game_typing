@@ -7,7 +7,16 @@ npm test -- --maxWorkers=1
 npm run build
 ```
 
-追加のブラウザ検証は、Python PlaywrightとChromium系のブラウザがすでに利用できる環境で行います。
+追加のブラウザ検証にはPython PlaywrightとChromium系のブラウザを使います。
+このMacではプロジェクトの `.venv` にPlaywrightをインストール済みです。
+別の端末では、プロジェクトのルートで次の準備を行います。
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r checks/requirements.txt
+```
+
+[Playwrightの公式導入手順](https://playwright.dev/python/docs/library)も参照できます。
 これらはアプリの依存ではありません。検証スクリプトはブラウザをダウンロードしません。
 Macではインストール済みのGoogle Chrome、Linuxではインストール済みのChromiumを自動選択します。
 それ以外はPlaywrightの既存のChromiumを使います。
@@ -22,9 +31,11 @@ npm run preview -- --host 127.0.0.1 --port 5180 --strictPort
 検証は順番に実行し、出力先は毎回まだ存在しない新しいフォルダを指定します。
 
 ```sh
-python3 checks/angel_integration_check.py http://127.0.0.1:5180 /tmp/angel-integration-next
-python3 checks/angel_finish_check.py http://127.0.0.1:5180 /tmp/angel-finish-next
-python3 checks/angel_real_timer_check.py http://127.0.0.1:5180 /tmp/angel-timer-next
+.venv/bin/python checks/angel_integration_check.py http://127.0.0.1:5180 /tmp/angel-integration-next
+.venv/bin/python checks/angel_finish_check.py http://127.0.0.1:5180 /tmp/angel-finish-next
+.venv/bin/python checks/angel_real_timer_check.py http://127.0.0.1:5180 /tmp/angel-timer-next
+.venv/bin/python checks/stage1_combat_check.py http://127.0.0.1:5180 /tmp/stage1-combat-next
+.venv/bin/python checks/stage1_frame_cost_check.py http://127.0.0.1:5180 /tmp/stage1-frame-cost-next.json
 ```
 
 | 検証 | 対象 |
@@ -32,6 +43,8 @@ python3 checks/angel_real_timer_check.py http://127.0.0.1:5180 /tmp/angel-timer-
 | `angel_integration_check.py` | 7土地、入力境界、停止、保存失敗・回復・遅い完了、計測・長文・分析、画像・音声故障 |
 | `angel_finish_check.py` | 4長文、5つの小画面サイズ、次の土地・最後の土地、設定・停止の往復と中断保存 |
 | `angel_real_timer_check.py` | 実時計での60秒計測、自動終了、キーイベントとメタ情報の保存 |
+| `stage1_combat_check.py` | ステージ1の軌道・防御と衝撃の形・接触時間・強打の持続、全打鍵保存、演出ON/OFFのログ一致、小画面、低負荷・動き軽減 |
+| `stage1_frame_cost_check.py` | 他のブラウザ検証終了後、3組の新規コンテキストでJSフレーム処理時間を測定。物理遅延やGPU/FPSは測らない |
 
 人工データと新しいブラウザコンテキスト、固有のQAデータベースだけを使用します。
 既存のユーザープロファイルは読み取りません。スクリーンショットとJSONは出力先に保存します。

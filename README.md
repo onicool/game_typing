@@ -3,6 +3,7 @@
 天使の姉弟エルナ・トワを選び、言葉を唱えて下界への道をひらくタイピングゲームです。
 全7土地の各5語の道中、日本語・英語の60秒計測、長文練習、記録分析と弱点練習を利用できます。
 ボス戦、人物ごとの性能差、物語の結末、BGMは制作中です。
+ステージ1では、仮の人型マシンへの攻撃と防御の演出を試せます。HPや被ダメージはありません。
 
 ## ローカルで試す
 
@@ -53,7 +54,7 @@ npm run preview -- --host 127.0.0.1 --port 5180 --strictPort
 | `src/engine/` | ローマ字入力判定 |
 | `src/content/` | 辞書・長文・素材一覧 |
 | `src/stats/`、`src/storage/` | 記録・分析・練習の選定・設定保存 |
-| `src/ui/`、`src/fx/` | ダイアログ・分析表示・効果音 |
+| `src/ui/`、`src/fx/` | ダイアログ・分析表示・攻防演出・効果音 |
 | `public/angel/` | 本体で配信する背景と人物のWebP |
 | `concept/` | 世界観・人物・7土地の原画と画面案 |
 | `checks/` | 天使版のブラウザ回帰検証 |
@@ -66,4 +67,5 @@ npm run preview -- --host 127.0.0.1 --port 5180 --strictPort
 - [制作予定](docs/ROADMAP.md)
 - [世界観とキャラクター](concept/WORLD_AND_CHARACTERS.md)
 - [整理後の確認結果](docs/review/cleanup-20261006.md)
+- [ステージ1攻防演出のZIP統合](docs/review/zip-integration-edd518b.md)
 - [統合当時の検証記録](docs/review/angel-integration.md)

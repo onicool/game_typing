@@ -25,11 +25,21 @@ function install(ctx = device()) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('optional audio never blocks gameplay', () => {
+  it('contains a combat-cue device failure without retrying on each frame', () => {
+    const { ctx, constructor } = install();
+    const audio = new Audio(); audio.ensure();
+    ctx.createOscillator.mockImplementation(() => { throw new Error('QA unavailable oscillator'); });
+    expect(() => { audio.combatCue('windup'); audio.combatCue('guard'); audio.ensure(); audio.key(0, false); }).not.toThrow();
+    expect(audio.unavailable).toBe(true);
+    expect(ctx.close).toHaveBeenCalledTimes(1);
+    expect(constructor).toHaveBeenCalledTimes(1);
+  });
   it('does not initialise an audio device for muted or zero-volume input', () => {
     const { constructor } = install();
     const audio = new Audio();
     audio.enabled = false;
     audio.ensure(); audio.key(3, true); audio.word(3); audio.miss(); audio.breach();
+    audio.combatCue('windup'); audio.combatCue('guard'); audio.combatCue('impact');
     audio.enabled = true; audio.setVolume(0); audio.ensure();
     expect(constructor).not.toHaveBeenCalled();
     expect(audio.unavailable).toBe(false);

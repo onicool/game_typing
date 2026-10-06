@@ -216,6 +216,20 @@ export class Audio {
     this.play(() => this.synthMiss());
   }
 
+  /** Theatrical enemy cues; optional and independent of typing/chord progress. */
+  combatCue(kind: 'windup' | 'guard' | 'impact') {
+    this.play(() => {
+      const ctx = this.live();
+      if (!ctx) return;
+      const t = ctx.currentTime, tone = ctx.createOscillator(), gain = ctx.createGain();
+      tone.type = 'sine';
+      tone.frequency.setValueAtTime(kind === 'windup' ? 220 : kind === 'guard' ? 660 : 140, t);
+      gain.gain.setValueAtTime(.045, t);
+      gain.gain.exponentialRampToValueAtTime(.001, t + .16);
+      tone.connect(gain); gain.connect(this.master); tone.start(t); tone.stop(t + .18);
+    });
+  }
+
   private synthMiss() {
     const ctx = this.live();
     if (!ctx) return;

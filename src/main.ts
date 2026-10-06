@@ -1,4 +1,5 @@
 import './style.css';
+import './fx/combat.css';
 import { Round, type RoundOptions } from './game/round';
 import { DICTIONARIES, type Dictionary, type Word } from './content/words';
 import { TypingSession, normalizeReading } from './engine/romaji';
@@ -12,6 +13,7 @@ import { PatchSource } from './stats/select';
 import type { Report, StoredKey, Vuln } from './stats/types';
 import { createSettingsStore, isBoolean, isDictionaryIndex, isEffectLevel, isNonNegativeNumber, isSpellingPreferences, isVolume } from './storage/settings';
 import { CHARACTERS, PLACES, RecentSpeed, isCharacter, isPlaceIndex, journeyDictionary, journeySource } from './game/journey';
+import { CombatScene, crossedMilestone } from './fx/combat';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const root = $('angel-ui-studio'), app = $('angel-app'), main = $('angel-main');
@@ -50,6 +52,7 @@ let reportMetric: 'latency' | 'miss' = 'latency';
 let panelWord: Word | undefined;
 let animations: Animation[] = [];
 let modal: 'pause-dialog' | 'settings-dialog' | null = null;
+let combat: CombatScene | null = null;
 
 function motionEnabled() { return motion > 0 && !reducedMotion.matches && !lowGraphics; }
 function applyEffects() {
@@ -57,6 +60,7 @@ function applyEffects() {
   $('setting-motion').textContent = motion === 0 ? 'オフ' : motion === 0.5 ? '弱' : '標準';
   $('setting-graphics').textContent = lowGraphics ? '低負荷' : '標準';
   if (!motionEnabled()) { stopAnimations(); app.style.setProperty('--av-depth', '1'); }
+  combat?.configure({ motion: motion > 0 && !reducedMotion.matches, low: lowGraphics, intensity: motion });
 }
 function stopAnimations() { for (const animation of animations) animation.cancel(); animations = []; }
 reducedMotion.addEventListener('change', applyEffects);
@@ -80,7 +84,7 @@ function updateNav() {
 }
 function changeView(next: typeof view) {
   read?.abort(); read = undefined; request++; report = undefined;
-  showModal(null); stopAnimations(); app.style.setProperty('--av-depth', '1');
+  showModal(null); stopAnimations(); combat = null; app.style.setProperty('--av-depth', '1');
   view = next; updateNav(); render();
   window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   if (next !== 'battle') main.querySelector<HTMLElement>('h1,h2')?.focus({ preventScroll: true });
@@ -105,6 +109,7 @@ function meter(kind: 'speed' | 'accuracy') {
   return `<div class="av-meter ${isSpeed ? '' : 'precision'}"><div class="av-meter-label">${label}</div><div class="av-gauge"><svg viewBox="0 0 126 126" role="meter" aria-label="${isSpeed ? '直近の正しい打鍵速度（目盛上限8打毎秒）' : '正確性'}" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="0"><circle class="av-gauge-track" cx="63" cy="63" r="50" pathLength="100" transform="rotate(135 63 63)" stroke-dasharray="75 100"/><circle id="${kind}-arc" class="av-gauge-fill" cx="63" cy="63" r="50" pathLength="100" transform="rotate(135 63 63)" stroke-dasharray="0 100"/></svg><div class="av-meter-number"><strong id="${kind}-value">0</strong><small>${isSpeed ? '打／秒' : '%'}</small></div></div><div class="av-meter-caption">${isSpeed ? '直近12打鍵' : '言葉の精度'}</div></div>`;
 }
 function start(spec: Run) {
+  combat = null;
   read?.abort(); request++; report = undefined; run = { ...spec }; endedRound = null;
   const opts: RoundOptions = { mode: spec.mode, baselines: loadBaselines(spec.dict), seed: Math.floor(Math.random() * 2 ** 32) };
   if (spec.mode === 'journey') { opts.source = journeySource(spec.dict); opts.wordLimit = spec.dict.words.length; }
@@ -117,6 +122,15 @@ function start(spec: Run) {
   view = 'battle'; updateNav(); showModal(null);
   const p = PLACES[spec.place], person = CHARACTERS[spec.character];
   main.innerHTML = `<section class="av-battle" aria-label="${p.name} タイピング"><div class="av-landscape" style="background-image:url('${art(p.art)}')" aria-hidden="true"></div><div class="av-hud"><div class="av-pilot"><div class="av-eyebrow">旅する天使</div><div class="av-pilot-name">${person.name}</div><div class="av-route-label">${spec.mode === 'journey' ? '道中の祈り' : esc(spec.dict.name)}</div></div><div class="av-stage"><div class="av-eyebrow">STAGE ${String(spec.place + 1).padStart(2, '0')} ／ ${p.sub}</div><div class="av-stage-name">${p.name}</div><div class="av-stage-progress" aria-label="旅の第${spec.place + 1}章">${PLACES.map((_, i) => `<i class="${i <= spec.place ? 'active' : ''}"></i>`).join('')}</div></div><div class="av-score-box"><div class="av-eyebrow">SCORE</div><div class="av-score" id="score">0</div><div class="av-combo"><strong id="combo">0</strong> COMBO</div></div></div><div class="av-arena"><section class="av-quest"><div class="av-quest-top"><span>${spec.mode === 'journey' ? 'QUEST' : 'PRACTICE'}</span><span id="quest-count">0 / 5</span></div><div class="av-quest-title">${spec.mode === 'journey' ? '五つの封印を<br>解き放つ' : spec.mode === 'passage' ? '言葉を最後まで<br>届けよう' : spec.mode === 'patch' ? `指づかいを磨く<br>${esc(spec.focus ?? '')}` : '自分の速さを<br>見つけよう'}</div><div class="av-quest-track" id="quest-track" role="progressbar" aria-label="練習の進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="quest-progress"></i></div><div class="av-quest-note" id="quest-note">${spec.mode === 'journey' ? '実績：門をひらく者' : spec.mode === 'passage' ? '時間制限なし' : '最初のキーから60秒'}</div></section><div class="av-obstacle-area" aria-hidden="true"><div class="av-obstacle" id="seal"><span id="seal-label">${p.landmark}</span></div><div class="av-spell" id="spell"></div><div class="av-obstacle-note" id="seal-note">一語の祈りで、道をひらく</div></div><aside class="av-speaker" aria-label="${person.name}の台詞"><div class="av-speech"><div class="av-speaker-name">${person.name}</div><div class="av-speech-text" id="speech">${person.opening}</div></div><div class="av-portrait">${picture(`player-${spec.character}`, person.name)}</div></aside></div><div class="av-combat-dock">${meter('speed')}<section class="av-main-panel" id="input-panel" tabindex="-1" aria-label="タイピング入力"><div class="av-input-top"><span id="input-label">言葉を唱える</span>${action('一時停止', 'pause')}</div><div class="av-current-word" id="word"></div><div class="av-reading" id="reading"></div><div class="av-romaji" id="romaji"></div><div class="av-input-status" id="input-status" role="status">最初のキーでスタート · ミスは打ち直し</div><div class="av-next"><span>次の言葉</span><div><strong id="next-word"></strong><span class="av-guide" id="next-guide"></span></div></div></section><div class="av-right-side">${meter('accuracy')}<div class="av-later"><span>その次の言葉</span><strong id="following-word"></strong><span class="av-guide" id="following-guide"></span></div></div></div><div class="av-bottom"><div class="av-shortcuts">Esc 一時停止 ／ IME OFF<br><span id="clock">最初のキーでスタート</span></div><span class="av-footnote">スコアは旅の演出用。記録の速度・正確率とは別です。</span></div><div id="ime-warning" class="av-ime" role="status" hidden>IMEをオフにしてください（英数入力）</div><div id="achievement" class="av-achievement" role="status" hidden><small>この挑戦の実績</small><strong>門をひらく者</strong></div></section>`;
+  if (spec.place === 0) {
+    const host = main.querySelector<HTMLElement>('.av-obstacle-area')!;
+    host.classList.add('av-machine-arena'); host.removeAttribute('aria-hidden');
+    host.insertAdjacentHTML('afterbegin', '<div class="av-combat-scene" role="img" aria-label="輪腕型の人型マシン。言葉の術を受け、輪腕で構える"></div>');
+    // Visible phase text is intentionally not announced on every key/frame.
+    $('seal-note').setAttribute('aria-live', 'off');
+    combat = new CombatScene(host.querySelector('.av-combat-scene')!, $('seal-note'), kind => audio.combatCue(kind));
+    combat.tick(0, false);
+  }
   applyEffects(); renderPanel(); renderMeters(performance.now()); $('input-panel').focus({ preventScroll: true });
   window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
 }
@@ -178,8 +192,9 @@ function renderMeters(now: number) {
 function breakthrough() {
   if (!round || !run) return;
   $('speech').textContent = CHARACTERS[run.character].clear;
-  $('seal-note').textContent = `封印を突破 · ${round.wordsDone} 語`;
   if (run.mode === 'journey' && round.wordsDone === round.wordLimit) $('achievement').hidden = false;
+  if (combat) { combat.hit('word'); return; }
+  $('seal-note').textContent = `封印を突破 · ${round.wordsDone} 語`;
   if (!motionEnabled()) return;
   stopAnimations();
   animations = [
@@ -210,7 +225,7 @@ function resume() {
 function end() {
   if (!round || !run || endedRound === round) return;
   endedRound = round; const finished = round, spec = run, result = round.result();
-  showModal(null); stopAnimations(); view = 'result'; updateNav();
+  showModal(null); stopAnimations(); combat = null; view = 'result'; updateNav();
   const fullJourney = spec.mode === 'journey' && round.wordsDone === round.wordLimit;
   const mode = spec.mode === 'journey' ? fullJourney ? 'journey' : 'practice' : spec.mode === 'patch' ? 'patch' : spec.mode === 'passage' || round.interrupted ? 'practice' : 'benchmark';
   const bestKey = `pb.${spec.dict.id}`, best = settings.get(bestKey, 0, isNonNegativeNumber);
@@ -333,11 +348,13 @@ window.addEventListener('keydown', event => {
   if (event.key === 'Escape') { event.preventDefault(); pause(event.timeStamp); return; }
   if (event.key.length !== 1 || (event.key === ' ' && !round.session.expected.includes(' '))) return;
   event.preventDefault(); $('ime-warning').hidden = true; audio.ensure();
+  const previousWord = round.word, previousKana = round.session.kanaDone;
   const outcome = round.input(event.key, event.timeStamp, event.code);
   if (outcome.late) { end(); return; }
   if (outcome.accepted) {
     speed.accepted(event.timeStamp, !!round.log.at(-1)?.afterPause); score += 20 + Math.min(round.chain, 50);
     audio.key(round.stage, outcome.critical);
+    combat?.hit(outcome.wordDone ? 'word' : crossedMilestone(previousWord, previousKana, round.session.kanaDone) ? 'milestone' : 'key');
     if (outcome.wordDone) { score += 100; audio.word(round.stage); breakthrough(); }
     $('input-status').textContent = outcome.wordDone ? '封印を突破' : 'ローマ字を打つ';
   } else { audio.miss(); $('speech').textContent = CHARACTERS[run!.character].miss; $('input-status').textContent = 'もう一度 · Backspaceは不要'; }
@@ -351,7 +368,7 @@ let lastFrame = performance.now();
 function frame(now: number) {
   if (view === 'battle' && round && !round.paused) {
     round.tick(now, Math.min(0.05, (now - lastFrame) / 1000));
-    if (round.finished) end(); else renderMeters(now);
+    if (round.finished) end(); else { renderMeters(now); combat?.tick(round.elapsedMs(now), round.started); }
   }
   lastFrame = now; requestAnimationFrame(frame);
 }
