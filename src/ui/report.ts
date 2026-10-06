@@ -1,6 +1,6 @@
 import type { Report, Severity } from '../stats/types';
 
-export const PATCH_KEYS_HINT = '[1]–[8] パッチ';
+export const PRACTICE_KEYS_HINT = '[1]–[8] 弱点練習';
 
 const ROWS = ['1234567890-^', 'qwertyuiop@[', 'asdfghjkl;:]', 'zxcvbnm,./'];
 const ROW_INDENT = [0, 26, 40, 62];
@@ -11,7 +11,7 @@ const SEVERITY_CLASS: Record<Severity, string> = {
   CRITICAL: 'sev-crit', HIGH: 'sev-high', MED: 'sev-med', LOW: 'sev-low', INVESTIGATING: 'sev-inv',
 };
 const SEVERITY_LABEL: Record<Severity, string> = {
-  CRITICAL: 'CRITICAL', HIGH: 'HIGH', MED: 'MED', LOW: 'LOW', INVESTIGATING: '調査中',
+  CRITICAL: '最優先', HIGH: '高', MED: '中', LOW: '低', INVESTIGATING: '確認中',
 };
 
 /** ratio = key latency / overall latency: fast → teal, typical → neutral slate, slow → pink. */
@@ -77,7 +77,7 @@ function profileNote(report: Report): string {
   const acc = (report.accuracy * 100).toFixed(1);
   const parts = [`正確率 ${acc}%、標準的な遷移は ${Math.round(report.overallLatencyMs)}ms。`];
   if (top) parts.push(`最も効く改善点は <code>${esc(top.label)}</code>（1000打あたり ${Math.round(top.impact)}ms の損失）。`);
-  else parts.push('目立った脆弱性はまだ確定していません。');
+  else parts.push('目立った苦手はまだ確定していません。');
   return parts.join('');
 }
 
@@ -93,25 +93,25 @@ export function renderReport(el: HTMLElement, report: Report, dictName: string, 
   const rows = report.vulns.length
     ? report.vulns.slice(0, 8).map((v, i) => `
       <tr>
-        <td class="mono muted">${esc(v.id)}</td>
+        <td class="mono muted">${esc(v.id.replace(/^VULN-/, '課題-'))}</td>
         <td><code>${esc(v.label)}</code> ${v.kind === 'bigram' ? '遷移' : 'キー'}　${reason(v)}</td>
         <td class="${SEVERITY_CLASS[v.severity]}">${SEVERITY_LABEL[v.severity]}</td>
         <td class="mono">+${Math.round(v.impact)}<small> ms / 1000打</small></td>
         <td class="mono muted">${v.n}</td>
-        <td class="mono"><kbd>[${i + 1}]</kbd> パッチ</td>
+        <td class="mono"><kbd>[${i + 1}]</kbd> 弱点練習</td>
       </tr>`).join('')
-    : '<tr><td colspan="6" class="muted">まだ脆弱性は検出されていません。ベンチマークを数回走らせてください。</td></tr>';
+    : '<tr><td colspan="6" class="muted">まだ苦手は見つかっていません。60秒の計測を数回試してください。</td></tr>';
 
   el.innerHTML = `
     <div class="rp-head">
       <div>
-        <div class="eyebrow">SYSTEM DIAGNOSTICS / ${esc(dictName)}</div>
-        <h1 class="jp">脆弱性レポート <small class="mono">// BUILD A BETTER YOU.</small></h1>
+        <div class="eyebrow">練習記録 / ${esc(dictName)}</div>
+        <h1 class="jp">指づかいの分析</h1>
       </div>
       <div class="rp-counters">
-        <div><div class="eyebrow">ACTIVE</div><div class="pink">${String(active).padStart(2, '0')}</div></div>
-        <div><div class="eyebrow">SESSIONS</div><div class="green">${String(report.sessions).padStart(2, '0')}</div></div>
-        <div><div class="eyebrow">SAMPLE</div><div>${report.sample.toLocaleString()}<small> 打鍵</small></div></div>
+        <div><div class="eyebrow">改善点</div><div class="pink">${String(active).padStart(2, '0')}</div></div>
+        <div><div class="eyebrow">練習回数</div><div class="green">${String(report.sessions).padStart(2, '0')}</div></div>
+        <div><div class="eyebrow">入力数</div><div>${report.sample.toLocaleString()}<small> 打鍵</small></div></div>
       </div>
     </div>
     <div class="rp-grid">
@@ -121,18 +121,18 @@ export function renderReport(el: HTMLElement, report: Report, dictName: string, 
         <div class="muted small rp-foot">標準的な遷移との比較　FAST <i class="sw" style="background:${heatColor(0.8)}"></i><i class="sw" style="background:${heatColor(1.0)}"></i><i class="sw" style="background:${heatColor(1.12)}"></i><i class="sw" style="background:${heatColor(1.35)}"></i> SLOW　（5回未満のキーは灰色）</div>
       </section>
       <section class="rp-card rp-trend">
-        <div class="rp-title"><span>02　成長ログ</span><span class="muted small">BENCHMARK / 字/秒・正確率</span></div>
+        <div class="rp-title"><span>02　成長の記録</span><span class="muted small">60秒計測 / 字/秒・正確率</span></div>
         ${trendChart(report)}
         <div class="rp-note jp">${profileNote(report)}</div>
       </section>
       <section class="rp-card rp-list">
-        <div class="rp-title"><span>03　改善インパクト順</span><span class="muted small">深刻度は「1000打あたりの損失時間」で判定</span></div>
-        <table class="vuln-table">
-          <thead><tr><th>ID</th><th>検出された課題</th><th>深刻度</th><th>改善インパクト</th><th>n</th><th>パッチ</th></tr></thead>
+        <div class="rp-title"><span>03　改善効果の大きい順</span><span class="muted small">優先度は「1000打あたりの損失時間」で判定</span></div>
+        <table class="practice-table">
+          <thead><tr><th>課題</th><th>苦手な入力</th><th>優先度</th><th>改善効果</th><th>回数</th><th>練習</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </section>
     </div>
-    <div class="rp-footer muted small"><span><kbd>ESC</kbd> 戻る　${PATCH_KEYS_HINT}</span><span>ログはこの端末だけに保存されます。</span></div>
+    <div class="rp-footer muted small"><span><kbd>ESC</kbd> 戻る　${PRACTICE_KEYS_HINT}</span><span>ログはこの端末だけに保存されます。</span></div>
   `;
 }

@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
+from browser_support import launch_chromium
 
 URL, destination = sys.argv[1:3]
 assert urlparse(URL).hostname in ('localhost', '127.0.0.1')
@@ -11,7 +12,7 @@ OUT = Path(destination)
 assert not OUT.exists(), 'Preserve previous evidence'
 OUT.mkdir(parents=True)
 with sync_playwright() as p:
-    browser=p.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox'])
+    browser=launch_chromium(p)
     context=browser.new_context(viewport={'width':1366,'height':768},reduced_motion='reduce')
     context.add_init_script('''localStorage.setItem('icebreaker.sound','false');
       const open=indexedDB.open.bind(indexedDB),name='qa-angel-real-timer-'+crypto.randomUUID();

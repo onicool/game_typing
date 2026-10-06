@@ -1,5 +1,5 @@
 import type { Dictionary, Word } from '../content/words';
-import type { WordSource } from '../game/round';
+import type { WordSource } from './round';
 
 export const CHARACTERS = {
   elna: { name: 'エルナ', role: '秩序を信じる天使', quote: '間違いは、直せばいいでしょう。',

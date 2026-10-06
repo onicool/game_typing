@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PATCH_KEYS_HINT, renderReport } from '../ui/report';
+import { PRACTICE_KEYS_HINT, renderReport } from '../ui/report';
 import type { Report } from './types';
 
 const report = (): Report => ({
@@ -27,9 +27,9 @@ describe('report rendering', () => {
     expect(el.innerHTML).toContain('5.00 字/秒');
     expect(el.innerHTML).toContain('98.0%');
     expect(el.innerHTML).toContain('EMA（5ラン）');
-    for (let i = 1; i <= 8; i++) expect(el.innerHTML).toContain(`<kbd>[${i}]</kbd> パッチ`);
+    for (let i = 1; i <= 8; i++) expect(el.innerHTML).toContain(`<kbd>[${i}]</kbd> 弱点練習`);
     expect(el.innerHTML).not.toContain('<kbd>[9]</kbd>');
-    expect(el.innerHTML).toContain(PATCH_KEYS_HINT);
+    expect(el.innerHTML).toContain(PRACTICE_KEYS_HINT);
     expect(el.innerHTML).toContain('&lt;test&gt;');
     expect(JSON.stringify(data)).toBe(before);
   });

@@ -1,7 +1,11 @@
 # 天使の旅と入力基盤の統合レビュー
 
+この資料は統合当時の検証記録です。2026-10-06の整理で旧画面・素材・専用コードと
+旧版の検証スクリプトを削除しました。現在の構成と起動方法は [README](../../README.md)
+を参照してください。以下の旧画面の記述は当時の比較結果です。
+
 2026-10-06のMacへの取り込みとローカル確認は
-[LOCAL_INTEGRATION.md](LOCAL_INTEGRATION.md) を参照してください。
+[初回Mac確認](local-mac-20261006.md) を参照してください。
 
 2026-10-05 UTC のクラウド検証。独立ブランチ `integrate/angel-typing-engine` の
 レビュー用実装です。新計画の画面を既存の入力・保存・分析へ接続し、再現した
@@ -77,8 +81,8 @@ main は `57fe2e5c3be73751fe40920e3303f93408afe61f` のままです。
 
 人工データ・fresh Chromium151.0.7922.173 contextと固有QA DBだけを使いました。
 既存ユーザーのブラウザ・DB・秘密は読み取っていません。
-集約証跡は [verification.json](docs/review/verification.json)、再実行方法は
-[checks/README.md](checks/README.md) に保存しています。
+集約証跡は [verification.json](verification.json)、再実行方法は
+[checks/README.md](../../checks/README.md) に保存しています。
 
 | 確認 | 結果と範囲 |
 |---|---|
@@ -132,17 +136,17 @@ Firefox/Firefox ESRとPlaywright WebKit実行体がないため、Chromium以外
 入力・速度は人工キーボード操作の値で、製品性能比較には使いません。
 原PNGと全7土地は `/tmp/game-typing-qa/angel-integration/production-final-03/` に保持。
 
-![姉弟選択・1366×768](docs/review/characters.webp)
-![7土地の地図・1366×768](docs/review/map.webp)
-![道中と固定入力パネル・1366×768](docs/review/battle.webp)
-![長文の入力位置と二つの冒頭先読み・800×600](docs/review/long-800x600.webp)
+![姉弟選択・1366×768](characters.webp)
+![7土地の地図・1366×768](map.webp)
+![道中と固定入力パネル・1366×768](battle.webp)
+![長文の入力位置と二つの冒頭先読み・800×600](long-800x600.webp)
 
 仕上げ後のfull-page撮影。390×844・640×480・320×568のブラウザ窓で撮影し、
 縦スクロール部分も含む画像です。1画面内に全要素が入るという証拠ではありません。
 
-![390px長文・全幅の本文と下段のメーター/その次の冒頭](docs/review/finish-long-390.webp)
-![640px長文・文と入力位置、二つの冒頭先読み](docs/review/finish-long-640.webp)
-![320px人物選択・顔と人物名の分離](docs/review/finish-characters-320.webp)
+![390px長文・全幅の本文と下段のメーター/その次の冒頭](finish-long-390.webp)
+![640px長文・文と入力位置、二つの冒頭先読み](finish-long-640.webp)
+![320px人物選択・顔と人物名の分離](finish-characters-320.webp)
 
 ## ローカル起動
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Round } from '../game/round';
+import { Round } from './round';
 import { normalizeReading } from '../engine/romaji';
 import { PLACES, RecentSpeed, journeyDictionary, journeySource } from './journey';
 

@@ -1,768 +1,358 @@
 import './style.css';
-import { Scene, isInterceptWord } from './fx/scene';
-import { Audio } from './fx/audio';
-import { Round, ROUND_MS, LAYERS_PER_FIREWALL, type RoundResult } from './game/round';
-import { DICTIONARIES } from './content/words';
+import { Round, type RoundOptions } from './game/round';
+import { DICTIONARIES, type Dictionary, type Word } from './content/words';
 import { TypingSession, normalizeReading } from './engine/romaji';
-import { analyze } from './stats/analyze';
-import { loadEvents, loadSessions, saveSession } from './stats/store';
-import type { Report, StoredKey, Vuln } from './stats/types';
-import { renderReport } from './ui/report';
+import { Audio } from './fx/audio';
 import { DialogFocus } from './ui/dialog';
+import { renderReport } from './ui/report';
+import { loadEvents, loadSessions, saveSession } from './stats/store';
+import { analyze } from './stats/analyze';
 import { loadBaselines, updateBaselines } from './stats/baselines';
 import { PatchSource } from './stats/select';
+import type { Report, StoredKey, Vuln } from './stats/types';
 import { createSettingsStore, isBoolean, isDictionaryIndex, isEffectLevel, isNonNegativeNumber, isSpellingPreferences, isVolume } from './storage/settings';
+import { CHARACTERS, PLACES, RecentSpeed, isCharacter, isPlaceIndex, journeyDictionary, journeySource } from './game/journey';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-
-const store = createSettingsStore(issue => {
-  const text = issue === 'invalid'
-    ? '保存設定の一部を読み込めません。一時設定で動作しています。元の保存内容は保持しています。'
-    : issue === 'unavailable'
-      ? '設定の読み込み・保存ができないため、このページ内でのみ設定を保持します。'
-      : '';
-  // Hidden/inert regions do not reach the accessibility tree. Keep the modal's
-  // own status in sync, and avoid announcing unchanged messages repeatedly.
+const root = $('angel-ui-studio'), app = $('angel-app'), main = $('angel-main');
+const dialogs = new DialogFocus(root);
+const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const art = (name: string) => `${import.meta.env.BASE_URL}angel/${name}.webp`;
+const picture = (name: string, alt: string, cls = '') => `<img class="${cls}" src="${art(name)}" alt="${esc(alt)}" loading="lazy" decoding="async" />`;
+const action = (label: string, name: string, cls = '') => `<button type="button" class="av-action ${cls}" data-action="${name}">${label}</button>`;
+const settings = createSettingsStore(issue => {
+  const text = issue === 'invalid' ? '保存設定の一部を読み込めません。一時設定で動作しています。元の保存内容は保持しています。'
+    : issue === 'unavailable' ? '設定はこのページ内でのみ保持します。再読み込みすると失われます。' : '';
   for (const id of ['settings-storage-state', 'settings-save-state']) {
-    const notice = $(id);
-    if (notice.textContent !== text) notice.textContent = text;
-    notice.classList.toggle('hidden', issue === null);
+    const el = $(id); if (el.textContent !== text) el.textContent = text; el.hidden = !text;
   }
 });
-
-const stage = $('stage');
-const dialogFocus = new DialogFocus(stage);
-const scene = new Scene($<HTMLCanvasElement>('scene'));
-const stageAssets = `${import.meta.env.BASE_URL}stages/`;
-scene.setBackground(`${stageAssets}skyway.webp`, `${stageAssets}skyway.png`);
-scene.setTarget(`${stageAssets}aether-sentinel.webp`, `${stageAssets}aether-sentinel.png`);
-const audio = new Audio();
-
-type Mode = 'title' | 'play' | 'result' | 'report';
-let mode: Mode = 'title';
-let reportReturn: Mode = 'title';
-let reportMetric: 'latency' | 'miss' = 'latency';
-let reportRequest = 0; // bumped on every open/close so a slow load cannot render over a newer one
-let reportRead: AbortController | undefined;
-let report: { data: Report; dictId: string; request: number } | null = null;
-let settingsOpen = false;
-let dictIdx = store.get('dict', 0, isDictionaryIndex(DICTIONARIES.length));
-const prefs: Record<string, string> = store.get('prefs', {}, isSpellingPreferences);
+let character = settings.get('angel.character', 'elna', isCharacter);
+let place = settings.get('angel.place', 0, isPlaceIndex);
+let dictIndex = settings.get('dict', 0, isDictionaryIndex(DICTIONARIES.length));
+const prefs = settings.get('prefs', {}, isSpellingPreferences);
+const audio = new Audio(); audio.enabled = settings.get('sound', true, isBoolean); audio.setVolume(settings.get('volume', 1, isVolume));
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+let motion = settings.get('effects.motion', reducedMotion.matches ? 0 : 1, isEffectLevel);
+let lowGraphics = settings.get('graphics.low', false, isBoolean);
+let view: 'characters' | 'journey' | 'training' | 'records' | 'battle' | 'result' = 'characters';
 let round: Round | null = null;
-audio.enabled = store.get('sound', true, isBoolean);
-audio.setVolume(store.get('volume', 1, isVolume));
+type Run = { dict: Dictionary; mode: NonNullable<RoundOptions['mode']>; place: number; character: typeof character; focus?: string; vulns?: Vuln[] };
+let run: Run | null = null;
+let endedRound: Round | null = null;
+let score = 0;
+const speed = new RecentSpeed();
+let read: AbortController | undefined;
+let request = 0;
+let report: { data: Report; dict: Dictionary } | undefined;
+let recordDict = DICTIONARIES[dictIndex];
+let reportMetric: 'latency' | 'miss' = 'latency';
+let panelWord: Word | undefined;
+let animations: Animation[] = [];
+let modal: 'pause-dialog' | 'settings-dialog' | null = null;
 
-type Effect = 'shake' | 'flash' | 'motion';
-type EffectLevel = 0 | 0.5 | 1;
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const effectDefaults: Record<Effect, EffectLevel> = { shake: reducedMotion ? 0 : 1, flash: 1, motion: reducedMotion ? 0 : 1 };
-const effects = {} as Record<Effect, EffectLevel>;
-let lowGraphics = store.get('graphics.low', false, isBoolean);
-for (const key of ['shake', 'flash', 'motion'] as const) {
-  effects[key] = store.get(`effects.${key}`, effectDefaults[key], isEffectLevel);
+function motionEnabled() { return motion > 0 && !reducedMotion.matches && !lowGraphics; }
+function applyEffects() {
+  app.classList.toggle('no-motion', !motionEnabled());
+  $('setting-motion').textContent = motion === 0 ? 'オフ' : motion === 0.5 ? '弱' : '標準';
+  $('setting-graphics').textContent = lowGraphics ? '低負荷' : '標準';
+  if (!motionEnabled()) { stopAnimations(); app.style.setProperty('--av-depth', '1'); }
+}
+function stopAnimations() { for (const animation of animations) animation.cancel(); animations = []; }
+reducedMotion.addEventListener('change', applyEffects);
+function renderSound() {
+  $('setting-sound').textContent = audio.enabled ? audio.unavailable ? '利用不可（オフ→オンで再試行）' : 'オン' : 'オフ';
+  $('sound-toggle').setAttribute('aria-pressed', String(audio.enabled));
+  $<HTMLInputElement>('sound-volume').value = String(audio.volume);
+}
+audio.onAvailabilityChange = renderSound;
+function showModal(id: typeof modal) {
+  const origin = document.activeElement;
+  modal = id;
+  for (const name of ['pause-dialog', 'settings-dialog']) $(name).hidden = name !== id;
+  dialogs.show(id ? $(id) : null, origin);
+}
+function updateNav() {
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-view]')) {
+    button.disabled = view === 'battle';
+    button.setAttribute('aria-pressed', String(button.dataset.view === view));
+  }
+}
+function changeView(next: typeof view) {
+  read?.abort(); read = undefined; request++; report = undefined;
+  showModal(null); stopAnimations(); app.style.setProperty('--av-depth', '1');
+  view = next; updateNav(); render();
+  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  if (next !== 'battle') main.querySelector<HTMLElement>('h1,h2')?.focus({ preventScroll: true });
+}
+function render() {
+  if (view === 'characters') {
+    main.innerHTML = `<section class="av-page av-character-page"><div class="av-heading"><p class="av-eyebrow">空と祈り</p><h1 tabindex="-1">誰と旅に出る？</h1><p>言葉を唱えて、下界への道をひらこう。</p></div><div class="av-choice-grid">${Object.entries(CHARACTERS).map(([key, p]) => `<button type="button" class="av-choice" data-person="${key}" aria-pressed="${character === key}">${picture(`player-${key}`, p.name)}<div class="av-choice-copy"><strong>${p.name}</strong><p>${p.role}<br>「${p.quote}」</p></div></button>`).join('')}</div><div class="av-page-footer"><span>${CHARACTERS[character].name}を選択中</span>${action('この天使で旅に出る', 'map', 'primary')}</div></section>`;
+  } else if (view === 'journey') {
+    const p = PLACES[place];
+    main.innerHTML = `<section class="av-page"><div class="av-heading"><p class="av-eyebrow">SEVEN PLACES</p><h1 tabindex="-1">旅の地図</h1><p>ひとつの言葉で、ひとつの封印を。時間制限のない道中練習です。</p></div><div class="av-map">${PLACES.map((p, i) => `<button type="button" class="av-choice" data-place="${i}" aria-pressed="${i === place}">${picture(p.art, p.name)}<div class="av-choice-copy"><small>STAGE ${String(i + 1).padStart(2, '0')}</small><strong>${p.name}</strong><span>${p.sub}</span></div></button>`).join('')}</div><div class="av-page-footer"><span>${CHARACTERS[character].name} · ${p.name}を選択中</span>${action('この場所へ', 'start-journey', 'primary')}</div><p class="av-footnote">各場所で五つの封印を突破する道中。ボス戦と物語の結末は制作中です。</p></section>`;
+  } else if (view === 'training') {
+    main.innerHTML = `<section class="av-page"><div class="av-heading"><p class="av-eyebrow">PRACTICE</p><h1 tabindex="-1">言葉を磨く</h1><p>旅のあいだに、打ちやすい指づかいを見つけよう。</p></div><div class="av-training-grid"><section class="av-card"><h2>60秒の計測</h2><p>日本語・英語の正確さと速度を記録。最初のキーで時計が動きます。</p><label>辞書 <select id="training-dict">${DICTIONARIES.map((d, i) => `<option value="${i}" ${i === dictIndex ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>${action('選んだ辞書で練習する', 'start-training', 'primary')}<p class="av-footnote">中断した計測と長文・弱点練習は自己ベストの対象外。</p></section><section class="av-card"><h2>ゆっくり長文</h2><p>読みとローマ字が入力位置を追いかけます。時間制限なし。途中終了も記録できます。</p>${action('長文を練習する', 'start-passage')}<hr><h2>自分の弱点を知る</h2><p>記録から遅い指の遷移やミスを確認し、弱点に合わせた練習へ。</p>${action('練習記録を見る', 'records')}</section></div><p class="av-help">shi / si・chi / tiなどの別綴りに対応。IMEはオフ。ミスはそのまま打ち直し、Backspaceは不要です。</p></section>`;
+  } else if (view === 'records') {
+    main.innerHTML = `<section class="av-page av-records"><h1 tabindex="-1">練習の記録</h1><div class="av-record-controls"><label>見る辞書 <select id="record-dict">${[...DICTIONARIES, ...PLACES.map((_, i) => journeyDictionary(i))].map(d => `<option value="${d.id}" ${d.id === recordDict.id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>${action('遅さ / ミス率を切り替える', 'metric')}${action('戻る', 'map')}</div><div id="report" class="rp" aria-busy="true"><p role="status">記録を読み込み中…</p></div></section>`;
+    void showRecords();
+  }
+  applyEffects();
 }
 
-// ---- layout ---------------------------------------------------------------
-
-let inputBoost = 1;
-function fit() {
-  const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
-  stage.style.transform = `scale(${s})`;
-  stage.style.setProperty('--text-boost', String(Math.max(1, Math.min(1.7, 0.75 / s))));
-  // Keep the task text legible rather than shrinking it with the whole scene.
-  inputBoost = Math.max(1, 0.875 / s);
-  stage.style.setProperty('--input-boost', String(inputBoost));
-  stage.style.setProperty('--input-width', `${Math.min(1800, Math.max(960, 720 / s))}px`);
-  stage.classList.toggle('compact-input', inputBoost > 1.01);
-  stage.classList.toggle('tight-input', s < 0.5);
-  if (round?.word.segments) renderPanel();
-  scene.resize(s);
-  scene.setArenaBottom(1080 - 139 - (round?.word.segments ? 414 : 360) * inputBoost);
+function meter(kind: 'speed' | 'accuracy') {
+  const isSpeed = kind === 'speed', label = isSpeed ? '速度' : '正確性', max = isSpeed ? 8 : 100;
+  return `<div class="av-meter ${isSpeed ? '' : 'precision'}"><div class="av-meter-label">${label}</div><div class="av-gauge"><svg viewBox="0 0 126 126" role="meter" aria-label="${isSpeed ? '直近の正しい打鍵速度（目盛上限8打毎秒）' : '正確性'}" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="0"><circle class="av-gauge-track" cx="63" cy="63" r="50" pathLength="100" transform="rotate(135 63 63)" stroke-dasharray="75 100"/><circle id="${kind}-arc" class="av-gauge-fill" cx="63" cy="63" r="50" pathLength="100" transform="rotate(135 63 63)" stroke-dasharray="0 100"/></svg><div class="av-meter-number"><strong id="${kind}-value">0</strong><small>${isSpeed ? '打／秒' : '%'}</small></div></div><div class="av-meter-caption">${isSpeed ? '直近12打鍵' : '言葉の精度'}</div></div>`;
 }
-window.addEventListener('resize', fit);
-fit();
-
-// Accuracy track segments
-const accuracyTrack = $('accuracy-track');
-for (let i = 0; i < 24; i++) accuracyTrack.appendChild(document.createElement('i'));
-
-// ---- HUD rendering --------------------------------------------------------
-
-const els = {
-  word: $('word'), reading: $('reading'), romaji: $('romaji'),
-  nextWord: $('next-word'), nextGuide: $('next-guide'),
-  inputLabel: $('input-label'), progressText: $('progress-text'), progressBar: $('progress-bar'),
-  chain: $('chain'), chainCaption: $('chain-caption'), ocStages: $('oc-stages'), ocName: $('oc-name'),
-  accuracyVal: $('accuracy-val'), accuracyNote: $('accuracy-note'),
-  integrityVal: $('integrity-val'), integrityBar: $('integrity-bar'),
-  layerIndex: $('layer-index'), iceStatus: $('ice-status'), iceId: $('ice-id'), iceKind: $('ice-kind'),
-  enemyLog: $('enemy-log'), depth: $('depth'), depthSub: $('depth-sub'),
-  sectorNo: $('sector-no'), sectorSub: $('sector-sub'),
-  timer: $('timer'), kps: $('kps'), modeLabel: $('mode-label'), sound: $('sound-state'),
-  edge: $('edge-flash'), ime: $('ime-warning'), readyHelp: $('ready-help'),
-  timeBar: $('time-bar'), layerPips: $('layer-pips'), chainPop: $('chain-pop'),
-  soundToggle: $<HTMLButtonElement>('sound-toggle'), soundIcon: $('sound-icon'),
-  volume: $<HTMLInputElement>('sound-volume'),
-};
-
-const OC_NAMES = ['0 / IDLE', 'I / SYNC', 'II / RESONANCE', 'III / FULL SPECTRUM'];
-const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
-const pad = (n: number, w = 2) => String(n).padStart(w, '0');
-let logLines: string[] = [];
-let errTimer = 0;
-let popTimer = 0;
-let nextWordCached: Round['nextWord'] | null = null;
-let followingWordCached: Round['followingWord'] | null = null;
-let panelWordCached: Round['word'] | null = null;
-
-function followPosition(container: HTMLElement, marker: HTMLElement | null) {
+function start(spec: Run) {
+  read?.abort(); request++; report = undefined; run = { ...spec }; endedRound = null;
+  const opts: RoundOptions = { mode: spec.mode, baselines: loadBaselines(spec.dict), seed: Math.floor(Math.random() * 2 ** 32) };
+  if (spec.mode === 'journey') { opts.source = journeySource(spec.dict); opts.wordLimit = spec.dict.words.length; }
+  if (spec.mode === 'patch') {
+    try { opts.source = new PatchSource(spec.dict.words, spec.dict.id, spec.vulns ?? [], prefs, { seed: opts.seed!, focus: spec.focus }); }
+    catch { changeView('training'); main.insertAdjacentHTML('beforeend', '<p class="av-help" role="status">この辞書は弱点練習の候補が不足しています。通常練習を利用してください。</p>'); return; }
+  }
+  round = new Round(spec.dict, prefs, opts); score = 0; speed.reset(); panelWord = undefined;
+  audio.reset(); audio.ensure(); stopAnimations(); app.style.setProperty('--av-depth', '1');
+  view = 'battle'; updateNav(); showModal(null);
+  const p = PLACES[spec.place], person = CHARACTERS[spec.character];
+  main.innerHTML = `<section class="av-battle" aria-label="${p.name} タイピング"><div class="av-landscape" style="background-image:url('${art(p.art)}')" aria-hidden="true"></div><div class="av-hud"><div class="av-pilot"><div class="av-eyebrow">旅する天使</div><div class="av-pilot-name">${person.name}</div><div class="av-route-label">${spec.mode === 'journey' ? '道中の祈り' : esc(spec.dict.name)}</div></div><div class="av-stage"><div class="av-eyebrow">STAGE ${String(spec.place + 1).padStart(2, '0')} ／ ${p.sub}</div><div class="av-stage-name">${p.name}</div><div class="av-stage-progress" aria-label="旅の第${spec.place + 1}章">${PLACES.map((_, i) => `<i class="${i <= spec.place ? 'active' : ''}"></i>`).join('')}</div></div><div class="av-score-box"><div class="av-eyebrow">SCORE</div><div class="av-score" id="score">0</div><div class="av-combo"><strong id="combo">0</strong> COMBO</div></div></div><div class="av-arena"><section class="av-quest"><div class="av-quest-top"><span>${spec.mode === 'journey' ? 'QUEST' : 'PRACTICE'}</span><span id="quest-count">0 / 5</span></div><div class="av-quest-title">${spec.mode === 'journey' ? '五つの封印を<br>解き放つ' : spec.mode === 'passage' ? '言葉を最後まで<br>届けよう' : spec.mode === 'patch' ? `指づかいを磨く<br>${esc(spec.focus ?? '')}` : '自分の速さを<br>見つけよう'}</div><div class="av-quest-track" id="quest-track" role="progressbar" aria-label="練習の進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="quest-progress"></i></div><div class="av-quest-note" id="quest-note">${spec.mode === 'journey' ? '実績：門をひらく者' : spec.mode === 'passage' ? '時間制限なし' : '最初のキーから60秒'}</div></section><div class="av-obstacle-area" aria-hidden="true"><div class="av-obstacle" id="seal"><span id="seal-label">${p.landmark}</span></div><div class="av-spell" id="spell"></div><div class="av-obstacle-note" id="seal-note">一語の祈りで、道をひらく</div></div><aside class="av-speaker" aria-label="${person.name}の台詞"><div class="av-speech"><div class="av-speaker-name">${person.name}</div><div class="av-speech-text" id="speech">${person.opening}</div></div><div class="av-portrait">${picture(`player-${spec.character}`, person.name)}</div></aside></div><div class="av-combat-dock">${meter('speed')}<section class="av-main-panel" id="input-panel" tabindex="-1" aria-label="タイピング入力"><div class="av-input-top"><span id="input-label">言葉を唱える</span>${action('一時停止', 'pause')}</div><div class="av-current-word" id="word"></div><div class="av-reading" id="reading"></div><div class="av-romaji" id="romaji"></div><div class="av-input-status" id="input-status" role="status">最初のキーでスタート · ミスは打ち直し</div><div class="av-next"><span>次の言葉</span><div><strong id="next-word"></strong><span class="av-guide" id="next-guide"></span></div></div></section><div class="av-right-side">${meter('accuracy')}<div class="av-later"><span>その次の言葉</span><strong id="following-word"></strong><span class="av-guide" id="following-guide"></span></div></div></div><div class="av-bottom"><div class="av-shortcuts">Esc 一時停止 ／ IME OFF<br><span id="clock">最初のキーでスタート</span></div><span class="av-footnote">スコアは旅の演出用。記録の速度・正確率とは別です。</span></div><div id="ime-warning" class="av-ime" role="status" hidden>IMEをオフにしてください（英数入力）</div><div id="achievement" class="av-achievement" role="status" hidden><small>この挑戦の実績</small><strong>門をひらく者</strong></div></section>`;
+  applyEffects(); renderPanel(); renderMeters(performance.now()); $('input-panel').focus({ preventScroll: true });
+  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+}
+function follow(container: HTMLElement, marker: HTMLElement | null) {
   if (!marker) return;
-  const top = marker.offsetTop;
-  const bottom = top + marker.offsetHeight;
+  const top = marker.offsetTop, bottom = top + marker.offsetHeight;
   if (top < container.scrollTop) container.scrollTop = top;
   else if (bottom > container.scrollTop + container.clientHeight) container.scrollTop = bottom - container.clientHeight;
 }
-
-function renderSound() {
-  const unavailable = audio.enabled && audio.unavailable;
-  els.sound.textContent = unavailable ? '[ 音声 利用不可 ]' : audio.enabled ? '[ 音声 ON ]' : '[ 音声 OFF ]';
-  els.soundIcon.textContent = audio.enabled && !unavailable && audio.volume > 0 ? '🔊' : '🔇';
-  els.soundToggle.setAttribute('aria-pressed', String(!audio.enabled));
-  els.soundToggle.setAttribute('aria-label', unavailable ? '音声をミュート（現在利用不可。オフからオンにすると再試行）' : audio.enabled ? '音声をミュート' : '音声をオン');
-  els.volume.value = String(audio.volume);
-}
-audio.onAvailabilityChange = renderSound;
-
-function toggleSound() {
-  audio.enabled = !audio.enabled;
-  audio.ensure();
-  store.set('sound', audio.enabled);
-  renderSound();
-}
-
-els.soundToggle.addEventListener('mousedown', (e) => e.preventDefault());
-els.soundToggle.addEventListener('click', (e) => {
-  toggleSound();
-  if (e.detail > 0) els.soundToggle.blur();
-});
-els.volume.addEventListener('input', () => {
-  audio.setVolume(Number(els.volume.value));
-  audio.ensure();
-  store.set('volume', audio.volume);
-  renderSound();
-});
-els.volume.addEventListener('pointerup', () => els.volume.blur());
-
-function applyEffects() {
-  scene.setEffects(effects);
-  scene.setLowGraphics(lowGraphics);
-  $('setting-graphics').textContent = lowGraphics ? '低負荷' : '標準';
-  stage.style.setProperty('--edge-opacity', String(0.55 * effects.flash));
-  stage.classList.toggle('flash-off', effects.flash === 0);
-  stage.classList.toggle('motion-off', effects.motion === 0);
-  for (const key of ['shake', 'flash', 'motion'] as const) {
-    $(`setting-${key}`).textContent = effects[key] === 0 ? 'オフ' : effects[key] === 0.5 ? '弱' : '標準';
-  }
-  if (effects.flash === 0) els.edge.classList.remove('on');
-}
-
-function cycleEffect(key: Effect) {
-  effects[key] = effects[key] === 0 ? 0.5 : effects[key] === 0.5 ? 1 : 0;
-  store.set(`effects.${key}`, effects[key]);
-  applyEffects();
-}
-
-for (const button of document.querySelectorAll<HTMLButtonElement>('[data-effect]')) {
-  button.addEventListener('click', () => {
-    button.focus({ preventScroll: true });
-    cycleEffect(button.dataset.effect as Effect);
-  });
-}
-$('graphics-toggle').addEventListener('click', () => {
-  lowGraphics = !lowGraphics;
-  store.set('graphics.low', lowGraphics);
-  applyEffects();
-});
-
-function announce(messages: string[]) {
-  if (!messages.length) return;
-  clearTimeout(popTimer);
-  els.chainPop.textContent = messages.join(' · ');
-  els.chainPop.classList.add('visible');
-  popTimer = window.setTimeout(() => els.chainPop.classList.remove('visible'), 1600);
-}
-
-function pushLog(line: string) {
-  logLines.push(line);
-  if (logLines.length > 4) logLines.shift();
-  els.enemyLog.innerHTML = logLines.map((l, i) => `<div class="${i === logLines.length - 1 ? 'active' : ''}">&gt; ${l}</div>`).join('');
-}
-
 function renderPanel(miss = false) {
-  if (!round) return;
-  const s = round.session;
-  const w = round.word;
-  const isJp = DICTIONARIES[dictIdx].id.startsWith('jp');
-  const long = !!w.segments;
-  stage.classList.toggle('long-input', long);
-  $('passage-help').classList.toggle('hidden', !long);
-  if (panelWordCached !== w) {
-    panelWordCached = w;
-    if (w.segments) els.word.innerHTML = w.segments.map(segment => `<span>${esc(segment.display)}</span>`).join('');
-    else els.word.textContent = w.display;
-    for (const node of [els.word, els.reading, els.romaji]) node.scrollTop = 0;
+  if (!round || !run || view !== 'battle') return;
+  const s = round.session, w = round.word, long = !!w.segments;
+  const panel = $('input-panel'); panel.classList.toggle('long-input', long); panel.classList.toggle('miss', miss);
+  main.querySelector('.av-next > span')!.textContent = long ? '次の文章（冒頭）' : '次の言葉';
+  main.querySelector('.av-later > span')!.textContent = long ? 'その次の文章（冒頭）' : 'その次の言葉';
+  if (panelWord !== w) {
+    panelWord = w;
+    $('word').innerHTML = w.segments ? w.segments.map(segment => `<span>${esc(segment.display)}</span>`).join('') : esc(w.display);
+    for (const id of ['word', 'reading', 'romaji']) $(id).scrollTop = 0;
   }
   if (w.segments) {
-    let end = 0;
-    let active = w.segments.length - 1;
-    w.segments.some((segment, index) => {
-      end += normalizeReading(segment.reading).length;
-      if (s.kanaDone < end) { active = index; return true; }
-      return false;
-    });
-    [...els.word.children].forEach((node, index) => {
-      node.classList.toggle('current-sentence', index === active);
-      node.classList.toggle('done', index < active);
-    });
-    followPosition(els.word, els.word.children[active] as HTMLElement);
+    let end = 0, active = w.segments.length - 1;
+    w.segments.some((segment, i) => { end += normalizeReading(segment.reading).length; if (s.kanaDone < end) { active = i; return true; } return false; });
+    [...$('word').children].forEach((el, i) => { el.classList.toggle('done', i < active); el.classList.toggle('current-sentence', i === active); });
+    follow($('word'), $('word').children[active] as HTMLElement);
   }
-  if (isJp) {
-    const r = normalizeReading(w.reading);
-    const restReading = r.slice(s.kanaDone);
-    els.reading.innerHTML = `<span class="done">${esc(r.slice(0, s.kanaDone))}</span>${long ? `<span class="reading-unit"><span class="reading-cursor" aria-hidden="true"></span>${esc(restReading.slice(0, 1))}</span>${esc(restReading.slice(1))}` : esc(restReading)}`;
-  } else {
-    els.reading.textContent = '';
+  const reading = run.dict.id.startsWith('jp') ? normalizeReading(w.reading) : '';
+  $('reading').innerHTML = `<span class="done">${esc(reading.slice(0, s.kanaDone))}</span><span class="reading-position">${esc(reading.slice(s.kanaDone, s.kanaDone + 1))}</span>${esc(reading.slice(s.kanaDone + 1))}`;
+  $('romaji').innerHTML = `<span class="av-typed">${esc(s.typed)}</span><span class="current-unit">${esc(s.guide.slice(s.typed.length, s.typed.length + 1)) || ' '}</span>${esc(s.guide.slice(s.typed.length + 1))}`;
+  if (long) { follow($('reading'), $('reading').querySelector('.reading-position')); follow($('romaji'), $('romaji').querySelector('.current-unit')); }
+  $('input-label').textContent = long ? '長文 · 句読点は , と .' : run.mode === 'patch' ? `弱点練習 · ${run.focus}` : '言葉を唱える';
+  const remaining = run.mode === 'journey' ? round.wordLimit - round.wordsDone - 1 : Infinity;
+  for (const [prefix, word, available] of [['next', round.nextWord, remaining > 0], ['following', round.followingWord, remaining > 1]] as const) {
+    const preview = word.segments?.[0] ?? word;
+    $(`${prefix}-word`).textContent = available ? preview.display : 'この道中の終わり';
+    $(`${prefix}-word`).title = available ? word.display : '';
+    $(`${prefix}-guide`).textContent = available ? new TypingSession(preview.reading, { prefs }).guide : '';
   }
-  const typed = s.typed;
-  const rest = s.guide.slice(typed.length);
-  const first = rest.slice(0, 1);
-  const firstHtml = miss && first ? `<span class="err">${esc(first)}</span>` : esc(first);
-  els.romaji.innerHTML = `<span class="typed">${esc(typed)}</span><span class="current-unit"><span class="cursor"></span>${firstHtml}</span>${esc(rest.slice(1))}`;
-  if (long) {
-    followPosition(els.reading, els.reading.querySelector<HTMLElement>('.reading-unit'));
-    followPosition(els.romaji, els.romaji.querySelector<HTMLElement>('.current-unit'));
-  }
-  const total = normalizeReading(w.reading).length;
-  els.progressText.textContent = `${pad(s.kanaDone)} / ${pad(total)}`;
-  els.progressBar.style.width = `${(s.kanaDone / total) * 100}%`;
-  const pick = round.currentPick;
-  // only weak-slot words are labelled; probes stay unmarked so they remain a fair check
-  const encounter = !long && isInterceptWord(round.wordsDone) ? '　◇ 迎撃（通常入力）' : '';
-  stage.classList.toggle('intercept-input', !!encounter);
-  els.inputLabel.textContent = `${long ? 'LONG PRACTICE' : 'INPUT'} // ${pad(round.wordsDone + 1, 3)}${pick.role === 'weak' && pick.target ? `　◆ TARGET ${pick.target}` : ''}${encounter}`;
-  if (nextWordCached !== round.nextWord || followingWordCached !== round.followingWord) {
-    nextWordCached = round.nextWord;
-    followingWordCached = round.followingWord;
-    els.nextWord.textContent = round.nextWord.display;
-    els.nextGuide.textContent = isJp ? new TypingSession(round.nextWord.reading, { prefs }).guide : '';
-    $('following-word').textContent = round.followingWord.display;
-    $('following-guide').textContent = isJp ? new TypingSession(round.followingWord.reading, { prefs }).guide : '';
-  }
-  els.readyHelp.classList.toggle('hidden', round.started || long);
-  scene.setProgress(s.kanaDone / total);
-  // The panel's stage-space bottom/height are fixed by CSS. Derive its reserved
-  // area without forcing a layout read after every accepted key's DOM writes.
-  scene.setArenaBottom(1080 - 139 - (long ? 414 : 360) * inputBoost);
+  const fraction = s.kanaDone / Math.max(1, normalizeReading(w.reading).length);
+  $('seal').style.setProperty('--charge', `${fraction * 100}%`);
+  $('seal').style.borderWidth = `${1 + fraction * 3}px`;
 }
-
-function renderHud() {
-  if (!round) return;
-  els.chain.textContent = String(round.chain);
-  els.chain.classList.toggle('broken', round.chain === 0 && round.misses > 0);
-  const tier = [10, 30, 50, 100, 200].filter((n) => round!.chain >= n).length;
-  els.chainCaption.textContent = `CHAIN TIER ${tier}`;
-  [...els.ocStages.children].forEach((el, i) => {
-    el.classList.toggle('active', i < round!.stage);
-    el.classList.toggle('last', i === 2);
+function renderMeters(now: number) {
+  if (!round || !run || view !== 'battle') return;
+  const rate = speed.value(now), accuracy = round.accuracy() * 100;
+  for (const [kind, value, max] of [['speed', rate, 8], ['accuracy', accuracy, 100]] as const) {
+    $(`${kind}-value`).textContent = kind === 'speed' ? value.toFixed(1) : value === 100 ? '100' : value.toFixed(1);
+    const arc = $(`${kind}-arc`); arc.setAttribute('stroke-dasharray', `${Math.min(value / max, 1) * 75} 100`);
+    arc.parentElement!.setAttribute('aria-valuenow', String(Math.min(value, max)));
+    arc.parentElement!.setAttribute('aria-valuetext', kind === 'speed' ? `${value.toFixed(1)}打毎秒` : `${value.toFixed(1)}%`);
+  }
+  $('combo').textContent = String(round.chain); $('score').textContent = score.toLocaleString('ja-JP');
+  const elapsed = round.elapsedMs(now), untimed = run.mode === 'journey' || run.mode === 'passage';
+  $('clock').textContent = !round.started ? '最初のキーでスタート' : untimed ? `${Math.floor(elapsed / 60000)}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, '0')} · 時間制限なし` : `残り ${Math.ceil(round.remainingMs(now) / 1000)} 秒`;
+  const fraction = run.mode === 'journey' ? round.wordsDone / round.wordLimit : run.mode === 'passage' ? round.session.kanaDone / normalizeReading(round.word.reading).length : elapsed / 60000;
+  $('quest-track').setAttribute('aria-valuenow', String(Math.min(100, fraction * 100))); $('quest-progress').style.width = `${Math.min(100, fraction * 100)}%`;
+  $('quest-count').textContent = run.mode === 'journey' ? `${round.wordsDone} / ${round.wordLimit}` : `${round.wordsDone} 語`;
+}
+function breakthrough() {
+  if (!round || !run) return;
+  $('speech').textContent = CHARACTERS[run.character].clear;
+  $('seal-note').textContent = `封印を突破 · ${round.wordsDone} 語`;
+  if (run.mode === 'journey' && round.wordsDone === round.wordLimit) $('achievement').hidden = false;
+  if (!motionEnabled()) return;
+  stopAnimations();
+  animations = [
+    $('seal').animate([{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(1.55)', opacity: 0, offset: 0.6 }, { transform: 'scale(1)', opacity: 1 }], { duration: 540, easing: 'ease-out' }),
+    $('spell').animate([{ transform: 'translateY(90px)', opacity: 0 }, { opacity: 1, offset: 0.25 }, { transform: 'translateY(-60px)', opacity: 0 }], { duration: 380, easing: 'ease-out' }),
+  ];
+  app.style.setProperty('--av-depth', String(1 + Math.min(round.wordsDone * 0.015 * motion, 0.12)));
+}
+function pause(now = performance.now()) {
+  if (view !== 'battle' || !round || round.finished) return;
+  round.pause(now); if (round.finished) { end(); return; }
+  speed.reset(); for (const animation of animations) animation.pause();
+  // Freeze the CSS background transition along with the input and clock.
+  const landscape = main.querySelector<HTMLElement>('.av-landscape');
+  if (landscape) { landscape.style.transform = getComputedStyle(landscape).transform; landscape.style.transition = 'none'; }
+  $('pause-finish').hidden = !round.started || (round.mode !== 'journey' && round.mode !== 'passage');
+  $('pause-note').textContent = '時計と入力を停止しています。再開後の最初の打鍵は速度の分析から除外します。やり直し・地図へ戻ると未保存の入力は残りません。';
+  $('ime-warning').hidden = true; showModal('pause-dialog');
+}
+function resume() {
+  if (!round || view !== 'battle') return;
+  round.resume(performance.now()); speed.reset(); audio.ensure(); showModal(null);
+  for (const animation of animations) animation.play();
+  const landscape = main.querySelector<HTMLElement>('.av-landscape');
+  if (landscape) { landscape.style.transform = ''; landscape.style.transition = ''; }
+  $('input-panel').focus({ preventScroll: true });
+}
+function end() {
+  if (!round || !run || endedRound === round) return;
+  endedRound = round; const finished = round, spec = run, result = round.result();
+  showModal(null); stopAnimations(); view = 'result'; updateNav();
+  const fullJourney = spec.mode === 'journey' && round.wordsDone === round.wordLimit;
+  const mode = spec.mode === 'journey' ? fullJourney ? 'journey' : 'practice' : spec.mode === 'patch' ? 'patch' : spec.mode === 'passage' || round.interrupted ? 'practice' : 'benchmark';
+  const bestKey = `pb.${spec.dict.id}`, best = settings.get(bestKey, 0, isNonNegativeNumber);
+  if (mode === 'benchmark' && result.kanaPerSec > best) settings.set(bestKey, result.kanaPerSec);
+  settings.set('prefs', prefs); updateBaselines(spec.dict, round.log);
+  const session = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const events: StoredKey[] = round.log.map(e => ({ ...e, session, dict: spec.dict.id, mode }));
+  const meta = { session, dict: spec.dict.id, mode, kanaPerSec: result.kanaPerSec, accuracy: result.accuracy, endedAt: Date.now() };
+  const label = fullJourney ? '五つの封印を突破' : spec.mode === 'journey' ? '道中の途中記録' : spec.mode === 'passage' ? round.session.complete ? '長文を完了' : '長文の途中記録' : spec.mode === 'patch' ? '弱点練習の記録' : '60秒の記録';
+  const feedback = result.slowBigram ? `「${result.slowBigram.pair}」の遷移が中央値より${Math.round(result.slowBigram.excessMs)}ms長め（${result.slowBigram.count}回）。` : result.missedKey ? `「${result.missedKey.key}」で${result.missedKey.count}回打ち直しました。` : '言葉をひとつずつ、正確に届けよう。';
+  main.innerHTML = `<section class="av-page av-result"><p class="av-eyebrow">${esc(spec.dict.name)} ／ ${CHARACTERS[spec.character].name}</p><h1 tabindex="-1">${label}</h1><p>${fullJourney ? CHARACTERS[spec.character].clear : 'おつかれさま。自分のペースで、また続けよう。'}</p>${fullJourney ? '<p class="av-earned">この挑戦の実績：門をひらく者</p>' : ''}<div class="av-result-grid"><div><span>速度</span><strong>${result.kanaPerSec.toFixed(2)}<small>字／秒</small></strong><small>${Math.round(result.keysPerMin)} 打鍵／分（参考）</small></div><div><span>正確率</span><strong>${(result.accuracy * 100).toFixed(1)}<small>%</small></strong><small>ミス ${result.misses}</small></div><div><span>最大コンボ</span><strong>${result.maxChain}</strong><small>完了 ${round.wordsDone} 語</small></div></div><p class="av-help">${esc(feedback)}</p><p class="av-footnote">${mode === 'benchmark' ? result.kanaPerSec > best ? '自己ベスト更新' : `自己ベスト ${best.toFixed(2)} 字／秒` : '練習記録です。60秒計測の自己ベストの対象外。'}${round.interrupted ? ' · 中断あり' : ''}</p><p id="session-save-state" class="av-save" role="status">今回の記録を保存中…</p><div id="recent-sessions"></div><div class="av-page-footer">${action('もう一度', 'retry', 'primary')}${fullJourney && spec.place < PLACES.length - 1 ? action('次の場所へ', 'next-place') : ''}${action('旅の地図', 'map')}${action('この辞書の記録', 'run-records')}</div></section>`;
+  main.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true });
+  void saveSession(events, meta).then(async status => {
+    if (round !== finished || view !== 'result') return;
+    $('session-save-state').textContent = status === 'persistent' ? '今回の練習記録をこのブラウザに保存しました。' : '今回の記録は一時保持のみです。再読み込みやページを閉じると失われます。次の保存時に再試行します。';
+    let partial = false;
+    const sessions = await loadSessions(spec.dict.id, () => { partial = true; });
+    if (round !== finished || view !== 'result') return;
+    const recent = [meta, ...sessions.filter(s => s.session !== session)].sort((a, b) => b.endedAt - a.endedAt).slice(0, 5);
+    $('recent-sessions').innerHTML = `<h2>直近の練習</h2>${partial ? '<p role="status">読み込めた記録と一時保持分だけを表示しています。</p>' : ''}${recent.map(s => `<div class="av-record-row"><span>${s.session === session ? '今回' : esc(new Date(s.endedAt).toLocaleString('ja-JP'))}</span><b>${s.kanaPerSec.toFixed(2)} 字／秒</b><span>${(s.accuracy * 100).toFixed(1)}%</span><small>${s.mode === 'journey' ? '道中完了' : s.mode === 'benchmark' ? '計測' : '練習'}</small></div>`).join('')}`;
+  }).catch(() => { if (round === finished && view === 'result') $('session-save-state').textContent = '保存状態を確認できませんでした。この画面の結果を確認してください。'; });
+}
+async function showRecords() {
+  read?.abort(); const controller = new AbortController(); read = controller; const token = ++request, dict = recordDict;
+  report = undefined;
+  $('report').setAttribute('aria-busy', 'true');
+  let partial = false; const unavailable = () => { partial = true; };
+  const [events, sessions] = await Promise.all([loadEvents(dict.id, unavailable, controller.signal), loadSessions(dict.id, unavailable, controller.signal)]);
+  if (controller.signal.aborted || token !== request || view !== 'records') return;
+  if (read === controller) read = undefined;
+  const data = analyze(events.filter(e => e.mode !== 'patch'), { dict: dict.id });
+  const metas = new Map(sessions.map(s => [s.session, s]));
+  const benchmarks = new Set(events.filter(e => e.mode === 'benchmark').map(e => e.session));
+  data.trend = data.trend.filter(p => metas.get(p.session)?.mode === 'benchmark' || (!metas.has(p.session) && benchmarks.has(p.session))).map(p => ({ ...p, kanaPerSec: metas.get(p.session)?.kanaPerSec, accuracy: metas.get(p.session)?.accuracy ?? p.accuracy }));
+  const seen = new Set(data.trend.map(p => p.session));
+  data.trend.push(...sessions.filter(s => s.mode === 'benchmark' && !seen.has(s.session)).map(s => ({ session: s.session, kanaPerSec: s.kanaPerSec, latencyMs: NaN, accuracy: s.accuracy })));
+  const el = $('report'); renderReport(el, data, dict.name, reportMetric);
+  el.querySelector('h1')!.textContent = '指づかいの分析';
+  el.querySelector('.rp-head .eyebrow')!.textContent = dict.name;
+  el.querySelector('.rp-footer')!.textContent = 'ログはこのブラウザだけに保存されます。旅・長文・弱点練習は計測の成長グラフから除外します。';
+  el.querySelectorAll('tbody tr').forEach((row, i) => {
+    if (data.vulns[i]) row.lastElementChild!.innerHTML = `<button type="button" class="av-action" data-patch="${i}">ここを練習</button>`;
   });
-  els.ocName.textContent = OC_NAMES[round.stage];
-  const integ = round.integrity();
-  els.integrityVal.textContent = `${Math.round(integ * 100)}%`;
-  els.integrityBar.style.width = `${integ * 100}%`;
-  els.layerIndex.textContent = `◆ LAYER ${pad(round.layer + 1)} / ${pad(LAYERS_PER_FIREWALL)}`;
-  els.iceKind.textContent = `迎撃機バリア / 第 ${pad(round.layer + 1)} 層`;
-  els.iceId.textContent = `[ ICE // FW-${pad(round.firewalls + 1, 3)} ]`;
-  els.sectorNo.textContent = '01';
-  els.sectorSub.textContent = 'SKYWAY / 空中回廊';
-  els.depth.textContent = (round.totalKana() * 12 + round.firewalls * 400).toLocaleString();
-  els.depthSub.textContent = `▾ ROUTE ${pad(round.firewalls + 1, 3)}`;
-  [...els.layerPips.children].forEach((el, i) => el.classList.toggle('broken', i < round!.layer));
-  els.layerPips.setAttribute('aria-label', `この防壁の突破済み層 ${round.layer} / ${LAYERS_PER_FIREWALL}`);
-  scene.setDamage(1 - integ);
-  scene.setStage(round.stage);
+  if (partial) el.insertAdjacentHTML('afterbegin', '<p role="status" class="av-help">保存領域の一部を読み込めません。取得できた記録と一時保持分だけを表示しています。確定済みの一時保持は直近5件、未保存分は全件です。復旧後に開き直してください。</p>');
+  el.setAttribute('aria-busy', 'false'); report = { data, dict };
 }
-
-function renderAccuracy() {
-  const v = round ? round.accuracy() : 1;
-  els.accuracyVal.innerHTML = `${(v * 100).toFixed(1)}<small>%</small>`;
-  const on = Math.round(v * 24);
-  [...accuracyTrack.children].forEach((el, i) => {
-    el.classList.toggle('on', i < on);
-  });
-  els.accuracyNote.textContent = `ミス ${round?.misses ?? 0}`;
+function patch(index: number) {
+  const item = report?.data.vulns[index]; if (!item || !report || view !== 'records') return;
+  start({ dict: report.dict, mode: 'patch', focus: item.label, vulns: report.data.vulns, place, character });
 }
-
-function renderClock(now: number) {
-  if (!round) return;
-  const rem = round.remainingMs(now);
-  const elapsed = round.elapsedMs(now) / 1000;
-  const passage = round.mode === 'passage';
-  els.timer.textContent = passage
-    ? round.started ? `PRACTICE ${pad(Math.floor(elapsed / 60))}:${pad(Math.floor(elapsed % 60))}` : 'PRACTICE / 最初のキーでスタート'
-    : round.started ? `RUN 00:${pad(Math.ceil(rem / 1000))}` : 'RUN 00:60 / 最初のキーでスタート';
-  els.timeBar.style.width = `${passage ? round.session.kanaDone / normalizeReading(round.word.reading).length * 100 : Math.max(0, Math.min(1, rem / ROUND_MS)) * 100}%`;
-  els.kps.textContent = `${elapsed > 1 ? (round.totalKana() / elapsed).toFixed(1) : '0.0'} 字/秒`;
-}
-
-// ---- flow -----------------------------------------------------------------
-
-function showOverlay(id: 'title-screen' | 'result-screen' | 'report-screen' | 'pause-screen' | 'settings-screen' | null) {
-  const origin = document.activeElement;
-  for (const o of ['title-screen', 'result-screen', 'report-screen', 'pause-screen', 'settings-screen']) $(o).classList.toggle('hidden', id !== o);
-  stage.classList.toggle('overlay-open', id !== null);
-  dialogFocus.show(id === 'pause-screen' || id === 'settings-screen' ? $(id) : null, origin);
-  stage.classList.toggle('modal-open', dialogFocus.active);
-}
-
-function pauseRound(t: number) {
-  if (mode !== 'play' || !round || round.paused || round.finished) return;
-  round.pause(t);
-  if (round.finished) return endRound();
-  $('pause-note').textContent = round.interrupted
-    ? '時計と入力を停止しています。再開後は練習扱い（中断あり）になります。'
-    : '最初のキーを打つ前の待機中です。Space / Enter で再開できます。';
-  $('pause-finish').classList.toggle('hidden', round.mode !== 'passage' || !round.started);
-  if (round.mode === 'passage') $('pause-note').textContent = '時計と入力を停止しています。途中でも「終了して記録を保存」で練習結果を残せます。タイトルへ戻ると未完了の入力は保存されません。';
-  clearTimeout(errTimer);
-  els.ime.classList.add('hidden');
-  renderPanel();
-  renderClock(t);
-  showOverlay('pause-screen');
-}
-
-function resumeRound(t: number) {
-  if (!round || !round.paused) return;
-  audio.ensure();
-  round.resume(t);
-  showOverlay(null);
-  renderClock(t);
-}
-
-function closeSettings() {
-  settingsOpen = false;
-  showOverlay('title-screen');
-}
-
 function openSettings() {
-  if (mode !== 'title' || settingsOpen) return;
-  settingsOpen = true;
-  showOverlay('settings-screen');
+  if (view === 'battle' && !round?.paused) pause();
+  renderSound(); applyEffects(); showModal('settings-dialog');
 }
-
-$('open-settings').addEventListener('click', openSettings);
-$('close-settings').addEventListener('click', closeSettings);
-$('pause-trigger').addEventListener('click', () => pauseRound(performance.now()));
-$('pause-resume').addEventListener('click', () => resumeRound(performance.now()));
-$('pause-finish').addEventListener('click', () => {
-  if (round?.mode !== 'passage' || !round.started) return;
-  round.finish(performance.now());
-  endRound();
+function closeSettings() { showModal(view === 'battle' && round?.paused ? 'pause-dialog' : null); }
+function perform(name: string) {
+  if (name === 'map') { round = null; changeView('journey'); }
+  else if (name === 'records') { recordDict = DICTIONARIES[dictIndex]; changeView('records'); }
+  else if (name === 'run-records' && run) { recordDict = run.dict; changeView('records'); }
+  else if (name === 'start-journey') start({ dict: journeyDictionary(place), mode: 'journey', place, character });
+  else if (name === 'start-training') { const dict = DICTIONARIES[dictIndex]; start({ dict, mode: dict.kind === 'passage' ? 'passage' : 'benchmark', place, character }); }
+  else if (name === 'start-passage') start({ dict: DICTIONARIES.find(d => d.kind === 'passage')!, mode: 'passage', place, character });
+  else if (name === 'retry' && run) start(run);
+  else if (name === 'next-place' && run) { place = Math.min(PLACES.length - 1, run.place + 1); settings.set('angel.place', place); changeView('journey'); }
+  else if (name === 'pause') pause();
+  else if (name === 'resume') resume();
+  else if (name === 'finish' && round) { round.finish(performance.now()); end(); }
+  else if (name === 'settings') openSettings();
+  else if (name === 'close-settings') closeSettings();
+  else if (name === 'motion') { motion = motion === 0 ? 0.5 : motion === 0.5 ? 1 : 0; settings.set('effects.motion', motion); applyEffects(); }
+  else if (name === 'graphics') { lowGraphics = !lowGraphics; settings.set('graphics.low', lowGraphics); applyEffects(); }
+  else if (name === 'sound') { audio.enabled = !audio.enabled; settings.set('sound', audio.enabled); audio.ensure(); renderSound(); }
+  else if (name === 'metric') { reportMetric = reportMetric === 'latency' ? 'miss' : 'latency'; if (view === 'records') void showRecords(); }
+}
+root.addEventListener('click', event => {
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button');
+  if (!button || button.disabled || !root.contains(button)) return;
+  if (dialogs.active && !dialogs.contains(button)) return;
+  if (button.dataset.action) perform(button.dataset.action);
+  else if (button.dataset.view && view !== 'battle') changeView(button.dataset.view as typeof view);
+  else if (button.dataset.person && isCharacter(button.dataset.person)) {
+    character = button.dataset.person; settings.set('angel.character', character); render(); main.querySelector<HTMLElement>(`[data-person="${character}"]`)?.focus();
+  } else if (button.dataset.place !== undefined && isPlaceIndex(Number(button.dataset.place))) {
+    place = Number(button.dataset.place); settings.set('angel.place', place); render(); main.querySelector<HTMLElement>(`[data-place="${place}"]`)?.focus();
+  } else if (button.dataset.patch !== undefined) patch(Number(button.dataset.patch));
 });
-$('pause-retry').addEventListener('click', () => startRound(lastRun));
-$('pause-title-return').addEventListener('click', toTitle);
-
-async function openReport() {
-  reportRead?.abort();
-  const read = new AbortController();
-  reportRead = read;
-  if (mode !== 'report') reportReturn = mode;
-  mode = 'report';
-  const request = ++reportRequest;
-  report = null;
-  const d = DICTIONARIES[dictIdx];
-  const el = $('report');
-  el.innerHTML = '<div class="eyebrow">ANALYZING…</div>';
-  showOverlay('report-screen');
-  let partial = false;
-  const unavailable = () => { partial = true; };
-  const [events, sessions] = await Promise.all([loadEvents(d.id, unavailable, read.signal), loadSessions(d.id, unavailable, read.signal)]);
-  if (reportRead === read) reportRead = undefined;
-  if (read.signal.aborted || request !== reportRequest || mode !== 'report' || d.id !== DICTIONARIES[dictIdx].id) return;
-  const data = analyze(events.filter((event) => event.mode !== 'patch'), { dict: d.id });
-  const bySession = new Map(sessions.map((x) => [x.session, x]));
-  const benchmarks = new Set(events.filter((event) => event.mode === 'benchmark').map((event) => event.session));
-  data.trend = data.trend.filter((point) => {
-    const meta = bySession.get(point.session);
-    return meta ? meta.mode === 'benchmark' : benchmarks.has(point.session);
-  }).map((point) => {
-    const meta = bySession.get(point.session);
-    return meta ? { ...point, kanaPerSec: meta.kanaPerSec, accuracy: meta.accuracy } : point;
-  });
-  const seen = new Set(data.trend.map((x) => x.session));
-  data.trend.push(...sessions
-    .filter((x) => x.mode === 'benchmark' && !seen.has(x.session))
-    .sort((a, b) => a.endedAt - b.endedAt)
-    .map((x) => ({ session: x.session, kanaPerSec: x.kanaPerSec, latencyMs: NaN, accuracy: x.accuracy })));
-  renderReport(el, data, d.name, reportMetric);
-  if (partial) {
-    const notice = document.createElement('p');
-    notice.className = 'jp muted';
-    notice.setAttribute('role', 'status');
-    notice.textContent = '保存領域の一部を読み込めません。取得できた記録と一時保持分だけで表示しています。確定済みログの一時保持は直近5件、未保存分はすべて保持します。復旧後に開き直してください。';
-    el.prepend(notice);
-  }
-  report = { data, dictId: d.id, request };
-}
-
-function closeReport() {
-  reportRead?.abort();
-  reportRead = undefined;
-  reportRequest++;
-  report = null;
-  mode = reportReturn;
-  showOverlay(mode === 'result' ? 'result-screen' : 'title-screen');
-}
-
-/** What a retry from the result/pause screen repeats: a benchmark, or a patch on the same focus. */
-let lastRun: { mode: 'benchmark' | 'passage' } | { mode: 'patch'; focus: string; dictId: string; vulns: Vuln[] } = { mode: 'benchmark' };
-
-function startPatch(index: number) {
-  if (mode !== 'report' || !report || report.dictId !== DICTIONARIES[dictIdx].id || report.request !== reportRequest) return;
-  const vuln = report.data.vulns[index];
-  if (!vuln) return;
-  const run: typeof lastRun = { mode: 'patch', focus: vuln.label, dictId: report.dictId, vulns: report.data.vulns.map((v) => ({ ...v })) };
-  reportRequest++;
-  report = null;
-  startRound(run);
-}
-
-function renderTitle() {
-  const d = DICTIONARIES[dictIdx];
-  $('dict-name').textContent = d.name;
-  const passage = d.kind === 'passage';
-  $('title-intro').textContent = passage ? '一つの文章を最後まで打つ、時間制限のない長文練習。' : '60 秒間、防壁を打ち破れ。単語を打ち切るたびに防壁の層が砕ける。';
-  $('title-help').innerHTML = passage
-    ? '読みとローマ字が入力位置に追従します。句読点は , と . で入力。ミスは打ち直し（Backspace不要）。<br /><span class="muted">Esc で中断・再開、途中終了して保存も可。60秒ベンチマークの自己ベストとは別の練習記録です。</span>'
-    : '表示されたローマ字を打つ。単語は自動で進む。ミスは打ち直し（Backspace不要）。語末の『ん』は nn。<br /><span class="muted">shi / si どちらでも可　・　最初のキーでスタート</span>';
-  els.modeLabel.textContent = `${d.label}　|　IME OFF`;
-  const best = store.get(`pb.${d.id}`, 0, isNonNegativeNumber);
-  $('title-best').textContent = !passage && best ? `自己ベスト ${best.toFixed(2)} 字/秒` : '';
-  renderSound();
-}
-
-function startRound(run: typeof lastRun = { mode: 'benchmark' }) {
-  const dict = DICTIONARIES[dictIdx];
-  const seed = (Math.random() * 2 ** 31) >>> 0;
-  const baselines = loadBaselines(dict);
-  if (run.mode === 'patch' && run.dictId === dict.id && run.vulns.length) {
-    try {
-      const source = new PatchSource(dict.words, run.dictId, run.vulns, prefs, { seed, focus: run.focus });
-      round = new Round(dict, prefs, { mode: 'patch', source, baselines, seed });
-    } catch (err) {
-      console.warn('patch pool unavailable, falling back to benchmark', err);
-      run = { mode: 'benchmark' };
-      round = new Round(dict, prefs, { baselines, seed });
-    }
-  } else {
-    run = { mode: dict.kind === 'passage' ? 'passage' : 'benchmark' };
-    round = new Round(dict, prefs, { mode: run.mode, baselines, seed });
-  }
-  lastRun = run;
-  const d0 = DICTIONARIES[dictIdx];
-  els.modeLabel.textContent = run.mode === 'patch' ? `PATCH // ${run.focus}　|　${d0.label}` : `${d0.label}　|　IME OFF`;
-  mode = 'play';
-  settingsOpen = false;
-  nextWordCached = null;
-  followingWordCached = null;
-  panelWordCached = null;
-  els.readyHelp.innerHTML = run.mode === 'passage'
-    ? '時間制限なしの長文練習。句読点は , と . で入力。<br /><span class="muted">最初のキーで時計が動く。Esc で中断・再開、途中終了して記録保存も可。</span>'
-    : '表示されたローマ字を打つ。単語は自動で進む。ミスは打ち直し（Backspace不要）。語末の『ん』は nn。<br /><span class="muted">shi / si どちらでも可　・　最初のキーでスタート</span>';
-  clearTimeout(errTimer);
-  clearTimeout(popTimer);
-  els.chainPop.classList.remove('visible');
-  els.edge.classList.remove('on');
-  els.ime.classList.add('hidden');
-  logLines = [];
-  els.enemyLog.innerHTML = '';
-  pushLog('LINK ESTABLISHED');
-  pushLog('AWAITING BREACH_');
-  els.iceStatus.textContent = 'AWAITING INPUT';
-  scene.reset();
-  audio.reset();
-  showOverlay(null);
-  renderPanel();
-  renderHud();
-  renderAccuracy();
-  renderClock(performance.now());
-}
-
-$('start-passage').addEventListener('click', () => {
-  dictIdx = DICTIONARIES.findIndex(dict => dict.kind === 'passage');
-  store.set('dict', dictIdx);
-  reportRequest++;
-  report = null;
-  renderTitle();
-  startRound({ mode: 'passage' });
+root.addEventListener('change', event => {
+  const target = event.target as HTMLSelectElement;
+  if (target.id === 'training-dict' && isDictionaryIndex(DICTIONARIES.length)(Number(target.value))) { dictIndex = Number(target.value); settings.set('dict', dictIndex); }
+  else if (target.id === 'record-dict') { const d = [...DICTIONARIES, ...PLACES.map((_, i) => journeyDictionary(i))].find(d => d.id === target.value); if (d) { recordDict = d; report = undefined; $('report').textContent = '記録を読み込み中…'; void showRecords(); } }
 });
+$('sound-volume').addEventListener('input', event => { audio.setVolume(Number((event.target as HTMLInputElement).value)); settings.set('volume', audio.volume); audio.ensure(); renderSound(); });
 
-function endRound() {
-  if (!round) return;
-  const completedRound = round;
-  mode = 'result';
-  clearTimeout(errTimer);
-  clearTimeout(popTimer);
-  els.chainPop.classList.remove('visible');
-  els.readyHelp.classList.add('hidden');
-  const d = DICTIONARIES[dictIdx];
-  const r: RoundResult = round.result();
-  const isPatch = round.mode === 'patch';
-  const isPassage = round.mode === 'passage';
-  const interrupted = round.interrupted;
-  const sessionMode = isPatch ? 'patch' : interrupted || isPassage ? 'practice' : 'benchmark';
-  const eligibleForBest = !interrupted && !isPatch && !isPassage;
-  const pbKey = `pb.${d.id}`;
-  const best = store.get(pbKey, 0, isNonNegativeNumber);
-  if (eligibleForBest && r.kanaPerSec > best) store.set(pbKey, r.kanaPerSec);
-  store.set('prefs', prefs);
-  updateBaselines(d, round.log);
-  const session = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-  const events: StoredKey[] = round.log.map((e) => ({ ...e, session, mode: sessionMode, dict: d.id }));
-  const meta = { session, dict: d.id, mode: sessionMode, kanaPerSec: r.kanaPerSec, accuracy: r.accuracy, endedAt: Date.now() };
-  const saveState = $('session-save-state');
-  saveState.textContent = '今回の練習記録を保存中…';
-  $('recent-sessions').textContent = '直近5セッションを読み込み中…';
-  void saveSession(events, meta)
-    .catch((err) => {
-      console.warn('failed to save session', err);
-      return 'unknown' as const;
-    })
-    .then(async (savedTo) => {
-      if (round !== completedRound) return;
-      saveState.textContent = savedTo === 'persistent'
-        ? '今回の練習記録をこのブラウザに保存しました。'
-        : savedTo === 'memory'
-          ? '今回の練習記録は一時保持のみです。再読み込みやページを閉じると失われます。'
-          : '今回の練習記録の保存状態を確認できませんでした。';
-      const sessions = await loadSessions(d.id);
-      if (round !== completedRound) return;
-      // Include the current result even if persistent storage is unavailable.
-      const recent = [meta, ...sessions.filter((x) => x.session !== session)]
-        .sort((a, b) => b.endedAt - a.endedAt).slice(0, 5);
-      $('recent-sessions').innerHTML = '<div class="eyebrow">RECENT // 直近5セッション</div>' + recent.map((x) =>
-        `<div class="session-row${x.session === session ? ' current' : ''}"><span>${x.session === session ? '今回' : esc(new Date(x.endedAt).toLocaleString('ja-JP'))}</span><b>${x.kanaPerSec.toFixed(2)} 字/秒</b><span>正確率 ${(x.accuracy * 100).toFixed(1)}%</span><span>${x.mode === 'practice' ? '練習' : x.mode === 'patch' ? 'パッチ' : '計測'}</span></div>`
-      ).join('');
-    }).catch((err) => {
-      console.warn('failed to load recent sessions', err);
-      if (round === completedRound) $('recent-sessions').textContent = `今回 ${r.kanaPerSec.toFixed(2)} 字/秒 · 正確率 ${(r.accuracy * 100).toFixed(1)}%（履歴を読み込めませんでした）`;
-    });
-
-  $('r-title').textContent = isPatch ? '[ PATCH COMPLETE ]' : '[ RUN COMPLETE ]';
-  $('r-mode').textContent = isPatch ? `パッチ練習${interrupted ? '（中断あり）' : ''}` : isPassage ? `長文練習${round.session.complete ? '（完了）' : '（途中終了）'}${interrupted ? '・中断あり' : ''}` : interrupted ? '練習扱い（中断あり）' : '60秒ベンチマーク';
-
-  $('r-speed').innerHTML = `${r.kanaPerSec.toFixed(2)}<small style="font-size:22px"> 字/秒</small>`;
-  $('r-kpm').textContent = `${Math.round(r.keysPerMin)} 打鍵/分（参考）`;
-  $('r-acc').innerHTML = `${(r.accuracy * 100).toFixed(1)}<small style="font-size:22px">%</small>`;
-  $('r-miss').textContent = `ミス ${r.misses}`;
-  $('r-chain').textContent = String(r.maxChain);
-  $('r-layers').textContent = `破った層 ${r.layers} / 防壁 ${r.firewalls}`;
-
-  const near = $('r-near');
-  if (!eligibleForBest) near.innerHTML = best ? `ベスト <b>${best.toFixed(2)} 字/秒</b>　・　${isPatch ? 'パッチ' : '練習'}結果は自己ベストの対象外` : 'この練習結果は自己ベストの対象外です。自己ベストはベンチマークで記録します。';
-  else if (!best) near.innerHTML = `初回記録 <b>${r.kanaPerSec.toFixed(2)} 字/秒</b>。ここから自分を超えていく。`;
-  else if (r.kanaPerSec > best) near.innerHTML = `<b>自己ベスト更新</b>　+${(r.kanaPerSec - best).toFixed(2)} 字/秒（前回ベスト ${best.toFixed(2)}）`;
-  else if (r.kanaPerSec === best) near.innerHTML = `<b>自己ベストタイ</b>　${best.toFixed(2)} 字/秒`;
-  else if (r.kanaPerSec >= best * 0.97) near.innerHTML = `自己ベストまで あと <b>${(best - r.kanaPerSec).toFixed(2)}</b> 字/秒（ベスト ${best.toFixed(2)}）`;
-  else near.innerHTML = `ベスト <b>${best.toFixed(2)} 字/秒</b>`;
-
-  const vuln = $('r-vuln');
-  const missedKeySamples = r.missedKey ? round.log.filter((e) => (e.correct ? e.key : e.intended) === r.missedKey!.key).length : 0;
-  if (r.slowBigram) {
-    vuln.innerHTML = `VULN 検出：<code>${esc(r.slowBigram.pair)}</code> の遷移が中央値より <code>+${Math.round(r.slowBigram.excessMs)}ms</code>（サンプル ${r.slowBigram.count} 回）`;
-  } else if (r.missedKey) {
-    vuln.innerHTML = `VULN 検出：<code>${esc(r.missedKey.key)}</code> の手前でミス ${r.missedKey.count} 回（サンプル ${missedKeySamples} 打鍵）`;
-  } else {
-    vuln.textContent = 'VULN 検出なし：データが少ないか、目立った弱点なし';
-  }
-  if (r.slowBigram && r.missedKey) vuln.innerHTML += `　／　<code>${esc(r.missedKey.key)}</code> の手前でミス ${r.missedKey.count} 回（サンプル ${missedKeySamples} 打鍵）`;
-  showOverlay('result-screen');
-}
-
-function toTitle() {
-  mode = 'title';
-  round = null;
-  settingsOpen = false;
-  clearTimeout(errTimer);
-  clearTimeout(popTimer);
-  els.readyHelp.classList.add('hidden');
-  els.chainPop.classList.remove('visible');
-  els.ime.classList.add('hidden');
-  renderTitle();
-  showOverlay('title-screen');
-}
-
-// ---- input ----------------------------------------------------------------
-
-window.addEventListener('keydown', (e) => {
-  if (e.metaKey || e.ctrlKey || e.altKey) return;
-  const editable = e.target instanceof HTMLElement && e.target.closest('input, select, textarea, [contenteditable]');
-  // Composition can use Enter/Escape to confirm/cancel text. It must never
-  // trigger a menu action, resume a round, or enter the typing log.
-  if (e.isComposing || e.key === 'Process' || e.keyCode === 229) {
+// Same composition/modifier/native-control boundaries as the established app.
+window.addEventListener('keydown', event => {
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  const editable = target?.closest('input,select,textarea,[contenteditable]');
+  if (event.isComposing || event.key === 'Process' || event.keyCode === 229) {
     if (editable) return;
-    if (mode === 'play' && !round?.paused) els.ime.classList.remove('hidden');
-    e.preventDefault();
+    if (view === 'battle' && !round?.paused) $('ime-warning').hidden = false;
+    event.preventDefault(); return;
+  }
+  if (dialogs.active) {
+    if (event.key === 'Tab') { dialogs.cycle(event); return; }
+    if (!dialogs.contains(event.target)) { event.preventDefault(); return; }
+    if (event.key === 'Escape') { event.preventDefault(); if (!event.repeat) modal === 'settings-dialog' ? closeSettings() : perform('map'); return; }
+    if (event.repeat) { event.preventDefault(); return; }
+    return; // Focused native button/slider owns Space, Enter and arrows.
+  }
+  if (event.key === 'Tab') return;
+  if (target?.closest('button,input,select,textarea,a,[contenteditable]')) {
+    if (event.key === 'Escape' && view === 'battle') { event.preventDefault(); $('input-panel').focus({ preventScroll: true }); }
     return;
   }
-  if (dialogFocus.active) {
-    if (e.key === 'Tab') { dialogFocus.cycle(e); return; }
-    if (!dialogFocus.contains(e.target)) { e.preventDefault(); return; }
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      if (!e.repeat) settingsOpen ? closeSettings() : toTitle();
-      return;
-    }
-    if (editable) return;
-    if (e.repeat) { e.preventDefault(); return; }
-    if (settingsOpen) {
-      if (e.key === '1') cycleEffect('shake');
-      else if (e.key === '2') cycleEffect('flash');
-      else if (e.key === '3') cycleEffect('motion');
-      else if (e.key.toLowerCase() === 's') closeSettings();
-    } else if (round?.paused) {
-      if (e.key.toLowerCase() === 'r') startRound(lastRun);
-      else if (e.key.toLowerCase() === 'q') toTitle();
-    }
-    // Space/Enter activate only the focused native button, on its normal event.
-    // All other modal keys finish here instead of reaching the game.
-    return;
-  }
-  if (mode === 'play' && e.key === 'Escape') {
-    e.preventDefault();
-    if (!e.repeat) {
-      if (e.target instanceof HTMLElement && e.target.closest('button, input, select, textarea, [contenteditable]')) {
-        $('input-panel').focus({ preventScroll: true });
-      } else pauseRound(e.timeStamp);
-    }
-    return;
-  }
-  // Native controls own their keys. Tab follows the browser's focus order;
-  // Escape releases control focus on non-play screens.
-  if (e.key === 'Tab') return;
-  if (e.target instanceof HTMLElement && e.target.closest('button, input, select, textarea, [contenteditable]')) {
-    if (e.key !== 'Escape') return;
-    e.target.blur();
-  }
-  if (e.key === ' ') e.preventDefault();
-
-  els.ime.classList.add('hidden');
-  audio.ensure();
-
-  if (mode === 'report') {
-    if (e.repeat) return;
-    if (e.key === 'Escape' || e.key === 'r' || e.key === 'R') closeReport();
-    else if (/^[1-8]$/.test(e.key)) startPatch(Number(e.key) - 1);
-    else if (e.key === 'h' || e.key === 'H') {
-      reportMetric = reportMetric === 'latency' ? 'miss' : 'latency';
-      void openReport();
-    }
-    return;
-  }
-  if (mode === 'title') {
-    if (e.repeat) return;
-    if (e.key === 'r' || e.key === 'R') return void openReport();
-    if (e.key === ' ' || e.key === 'Enter') startRound();
-    else if (e.key.toLowerCase() === 'd') {
-      dictIdx = (dictIdx + 1) % DICTIONARIES.length;
-      reportRequest++;
-      report = null;
-      store.set('dict', dictIdx);
-      renderTitle();
-    } else if (e.key === 'm' || e.key === 'M') {
-      toggleSound();
-    } else if (e.key === 's' || e.key === 'S') {
-      openSettings();
-    }
-    return;
-  }
-  if (mode === 'result') {
-    if (e.repeat) return;
-    if (e.key === ' ' || e.key === 'Enter') startRound(lastRun);
-    else if (e.key === 'Escape') toTitle();
-    else if (e.key === 'r' || e.key === 'R') void openReport();
-    return;
-  }
-
-  // play
-  if (!round) return;
-  if (e.repeat || e.key.length !== 1) return;
-  if (round.finished) return;
-  if (e.key === ' ' && !round.session.expected.includes(' ')) return;
-
-  const out = round.input(e.key, e.timeStamp, e.code);
-  if (out.late) return endRound();
-  if (out.accepted) {
-    audio.key(round.stage, out.critical);
-    scene.hit(out.critical, out.criticalGainMs);
-    if (effects.motion > 0) els.chain.animate([{ transform: `scale(${1 + 0.12 * effects.motion})` }, { transform: 'scale(1)' }], { duration: 140, easing: 'ease-out' });
-    if (out.wordDone) {
-      audio.word(round.stage);
-      scene.layerBreak();
-      pushLog(out.firewallDone ? 'FIREWALL BREACHED' : 'FRACTURE DETECTED');
-      els.iceStatus.textContent = 'BREACH IN PROGRESS';
-      if (out.firewallDone) {
-        audio.breach();
-        scene.breach();
-        pushLog('ROUTE REBUILDING');
-      }
-    }
-    renderPanel();
-  } else {
-    audio.miss();
-    scene.miss();
-    els.edge.classList.remove('on');
-    if (effects.flash > 0) {
-      void els.edge.offsetWidth;
-      els.edge.classList.add('on');
-    }
-    renderPanel(true);
-    clearTimeout(errTimer);
-    errTimer = window.setTimeout(() => mode === 'play' && renderPanel(), 160);
-  }
-  const announcements: string[] = [];
-  if (out.wordDone && isInterceptWord(round.wordsDone - 1)) announcements.push('迎撃成功');
-  if (out.accepted && [10, 30, 50, 100, 200].includes(round.chain)) announcements.push(`CHAIN ${round.chain}!`);
-  if (out.stageChanged) announcements.push(`OVERCLOCK ${['0', 'I', 'II', 'III'][round.stage]}`);
-  announce(announcements);
-  renderHud();
-  renderAccuracy();
-  renderClock(e.timeStamp);
-  if (round.finished) endRound();
+  if (event.repeat) return;
+  if (view === 'records') { if (/^[1-8]$/.test(event.key)) patch(Number(event.key) - 1); else if (event.key.toLowerCase() === 'h') perform('metric'); else if (event.key === 'Escape') perform('map'); return; }
+  if (view === 'result') { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); perform('retry'); } else if (event.key === 'Escape') perform('map'); return; }
+  if (view !== 'battle' || !round || round.paused || round.finished) return;
+  if (event.key === 'Escape') { event.preventDefault(); pause(event.timeStamp); return; }
+  if (event.key.length !== 1 || (event.key === ' ' && !round.session.expected.includes(' '))) return;
+  event.preventDefault(); $('ime-warning').hidden = true; audio.ensure();
+  const outcome = round.input(event.key, event.timeStamp, event.code);
+  if (outcome.late) { end(); return; }
+  if (outcome.accepted) {
+    speed.accepted(event.timeStamp, !!round.log.at(-1)?.afterPause); score += 20 + Math.min(round.chain, 50);
+    audio.key(round.stage, outcome.critical);
+    if (outcome.wordDone) { score += 100; audio.word(round.stage); breakthrough(); }
+    $('input-status').textContent = outcome.wordDone ? '封印を突破' : 'ローマ字を打つ';
+  } else { audio.miss(); $('speech').textContent = CHARACTERS[run!.character].miss; $('input-status').textContent = 'もう一度 · Backspaceは不要'; }
+  renderPanel(!outcome.accepted); renderMeters(event.timeStamp); if (round.finished) end();
 });
-
-window.addEventListener('blur', (e) => pauseRound(e.timeStamp));
-document.addEventListener('visibilitychange', (e) => {
-  if (document.hidden) pauseRound(e.timeStamp || performance.now());
-});
-
-// ---- loop -----------------------------------------------------------------
-
+window.addEventListener('blur', event => pause(event.timeStamp));
+// Reflow can move the active long-text cursor outside its scroll window.
+window.addEventListener('resize', () => renderPanel($('input-panel')?.classList.contains('miss')));
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 let lastFrame = performance.now();
-function loop(now: number) {
-  const dt = Math.min(0.05, (now - lastFrame) / 1000);
-  lastFrame = now;
-  if (mode === 'play' && round && !round.paused) {
-    round.tick(now, dt);
-    renderClock(now);
-    if (round.finished) endRound();
+function frame(now: number) {
+  if (view === 'battle' && round && !round.paused) {
+    round.tick(now, Math.min(0.05, (now - lastFrame) / 1000));
+    if (round.finished) end(); else renderMeters(now);
   }
-  scene.setActive(mode === 'play' && !!round?.started && !round.paused && !round.finished);
-  scene.frame(now);
-  requestAnimationFrame(loop);
+  lastFrame = now; requestAnimationFrame(frame);
 }
-requestAnimationFrame(loop);
-
-applyEffects();
-renderAccuracy();
-renderTitle();
-showOverlay('title-screen');
+renderSound(); render(); updateNav(); requestAnimationFrame(frame);
