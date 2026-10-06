@@ -10,7 +10,32 @@
 `npm run dev` と本番プレビューのrootは統合版、`/legacy.html`が従来版です。
 依存と保存スキーマを追加・更新していないため、既存環境の依存更新は不要です。
 
+## このMacで試す
+
+2026-10-06に指定のGitバンドルを `codex/angel-integration-local` へ取り込みました。
+Macでの確認結果は [LOCAL_INTEGRATION.md](LOCAL_INTEGRATION.md) に記録しています。
+
+```sh
+cd /Users/oshida/dev/game_typing
+npm run dev -- --host 127.0.0.1 --port 5179 --strictPort
+```
+
+このMacのブラウザで [統合版](http://127.0.0.1:5179/) を開いてください。
+[従来版](http://127.0.0.1:5179/legacy.html) も同じサーバーで確認できます。
+天使を選び、「この天使で旅に出る」→土地を選択→「この場所へ」で開始します。
+IMEをオフにして表示されたローマ字を入力し、Escで一時停止します。
+サーバーがすでに起動している場合は、ブラウザを開くだけで試せます。
+停止は起動した端末のCtrl-Cです。
+
+```sh
+npm test -- --maxWorkers=1
+npm run build
+```
+
 ## 従来版と計画資料
+
+以降は従来版の開発記録です。クラウドからMacへの移送案などは当時の記録で、
+現在のMacでの起動には上記手順を使ってください。
 
 天使の姉弟が下界を旅する物語の設定と、全7ステージの構成案は
 [世界観とキャラクター設定資料](concept/WORLD_AND_CHARACTERS.md) にまとめています。
