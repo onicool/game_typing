@@ -981,7 +981,7 @@
   },
   "screenshots": [
     {
-      "file": "docs/review/characters.webp",
+      "file": "docs/review/archive/characters.webp",
       "source": "/tmp/game-typing-qa/angel-integration/production-final-03/01-characters.png",
       "dimensions": [
         1366,
@@ -991,7 +991,7 @@
       "compression": "WebP quality 88, same dimensions, no composition"
     },
     {
-      "file": "docs/review/map.webp",
+      "file": "docs/review/archive/map.webp",
       "source": "/tmp/game-typing-qa/angel-integration/production-final-03/02-map.png",
       "dimensions": [
         1366,
@@ -1001,7 +1001,7 @@
       "compression": "WebP quality 88, same dimensions, no composition"
     },
     {
-      "file": "docs/review/battle.webp",
+      "file": "docs/review/archive/battle.webp",
       "source": "/tmp/game-typing-qa/angel-integration/production-final-03/stage-01.png",
       "dimensions": [
         1366,
@@ -1011,7 +1011,7 @@
       "compression": "WebP quality 88, same dimensions, no composition"
     },
     {
-      "file": "docs/review/long-800x600.webp",
+      "file": "docs/review/archive/long-800x600.webp",
       "source": "/tmp/game-typing-qa/angel-integration/production-final-03/06-long-800x600.png",
       "dimensions": [
         800,
@@ -1021,7 +1021,7 @@
       "compression": "WebP quality 88, same dimensions, no composition"
     },
     {
-      "file": "docs/review/finish-long-390.webp",
+      "file": "docs/review/archive/finish-long-390.webp",
       "source": "/tmp/game-typing-qa/angel-integration/finish-05/long-1-390x844.png",
       "dimensions": [
         390,
@@ -1031,7 +1031,7 @@
       "compression": "Same-size WebP quality 88; actual full-page capture; vertical scrolling required"
     },
     {
-      "file": "docs/review/finish-long-640.webp",
+      "file": "docs/review/archive/finish-long-640.webp",
       "source": "/tmp/game-typing-qa/angel-integration/finish-05/long-2-640x480.png",
       "dimensions": [
         640,
@@ -1041,7 +1041,7 @@
       "compression": "Same-size WebP quality 88; actual full-page capture; vertical scrolling required"
     },
     {
-      "file": "docs/review/finish-characters-320.webp",
+      "file": "docs/review/archive/finish-characters-320.webp",
       "source": "/tmp/game-typing-qa/angel-integration/finish-05/characters-towa-320x568.png",
       "dimensions": [
         320,

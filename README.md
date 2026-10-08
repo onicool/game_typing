@@ -56,16 +56,22 @@ npm run preview -- --host 127.0.0.1 --port 5180 --strictPort
 | `src/stats/`、`src/storage/` | 記録・分析・練習の選定・設定保存 |
 | `src/ui/`、`src/fx/` | ダイアログ・分析表示・攻防演出・効果音 |
 | `public/angel/` | 本体で配信する背景と人物のWebP |
-| `concept/` | 世界観・人物・7土地の原画と画面案 |
+| `concept/` | 世界観・人物・7土地の原画と生成条件 |
 | `checks/` | 天使版のブラウザ回帰検証 |
-| `docs/` | 構成、制作予定、確認結果 |
+| `docs/` | 構成と制作予定 |
+| `docs/review/` | 現在の実装の確認結果と資料案内 |
+| `docs/review/archive/` | 過去の統合・旧版削除の確認資料 |
 
 2026-10-06に旧ハッキング版の画面・専用コード・素材・検証スクリプト・画面案を削除しました。
 現在の配信・ビルド対象は天使版のみです。
+2026-10-08に旧名の起動設定、実装前の独立画面案と専用サーバー、
+現在のGit履歴に取り込み済みの受領用bundleを削除し、過去の確認資料を保管用フォルダへ移しました。
+起動は上記のnpm手順に統一しています。
 
 - [実装構成](docs/ARCHITECTURE.md)
 - [制作予定](docs/ROADMAP.md)
 - [世界観とキャラクター](concept/WORLD_AND_CHARACTERS.md)
-- [整理後の確認結果](docs/review/cleanup-20261006.md)
+- [確認資料の案内](docs/review/README.md)
 - [ステージ1攻防演出のZIP統合](docs/review/zip-integration-edd518b.md)
-- [統合当時の検証記録](docs/review/angel-integration.md)
+- [旧版削除当時の確認結果](docs/review/archive/cleanup-20261006.md)
+- [初回統合当時の検証記録](docs/review/archive/angel-integration.md)

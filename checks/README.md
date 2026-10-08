@@ -50,7 +50,8 @@ npm run preview -- --host 127.0.0.1 --port 5180 --strictPort
 既存のユーザープロファイルは読み取りません。スクリーンショットとJSONは出力先に保存します。
 終了後は検証ブラウザを閉じ、プレビューは起動端末のCtrl-Cで停止します。
 
-過去の [クラウド統合確認](../docs/review/angel-integration.md) と
-[Mac確認](../docs/review/local-mac-20261006.md) は当時の記録です。
-現在の [整理後の確認](../docs/review/cleanup-20261006.md) と区別してください。
+現在のステージ1攻防演出を含む検証結果は [ZIP統合確認](../docs/review/zip-integration-edd518b.md) にあります。
+過去の [クラウド統合確認](../docs/review/archive/angel-integration.md)、
+[Mac確認](../docs/review/archive/local-mac-20261006.md)、
+[旧版削除の確認](../docs/review/archive/cleanup-20261006.md) は当時の記録です。
 自動ブラウザ検証は実物のIME、読み上げソフト、物理入力・描画遅延を測りません。
