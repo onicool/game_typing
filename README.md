@@ -70,6 +70,7 @@ npm run preview -- --host 127.0.0.1 --port 5180 --strictPort
 
 - [実装構成](docs/ARCHITECTURE.md)
 - [制作予定](docs/ROADMAP.md)
+- [ゲーム体験設計書（段階0・段階1）](docs/GAME_DESIGN.md)
 - [世界観とキャラクター](concept/WORLD_AND_CHARACTERS.md)
 - [確認資料の案内](docs/review/README.md)
 - [ステージ1攻防演出のZIP統合](docs/review/zip-integration-edd518b.md)
