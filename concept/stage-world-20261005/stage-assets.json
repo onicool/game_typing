@@ -1,0 +1,61 @@
+{
+  "generator": "built-in image_gen",
+  "assets": [
+    {
+      "stage": 1,
+      "title": "暁の天界・出立の門",
+      "file": "stage-01-heaven.png",
+      "width": 1672,
+      "height": 941,
+      "bytes": 2479049
+    },
+    {
+      "stage": 2,
+      "title": "風車の町・晴れ渡る広場",
+      "file": "stage-02-windmill-town.png",
+      "width": 1672,
+      "height": 941,
+      "bytes": 2800356
+    },
+    {
+      "stage": 3,
+      "title": "豊穣の街道・夕映えの分かれ道",
+      "file": "stage-03-harvest-road.png",
+      "width": 1672,
+      "height": 941,
+      "bytes": 3077783
+    },
+    {
+      "stage": 4,
+      "title": "煤煙の運河都市・薬院の水路",
+      "file": "stage-04-canal-industry.png",
+      "width": 1672,
+      "height": 941,
+      "bytes": 2731953
+    },
+    {
+      "stage": 5,
+      "title": "花灯りの歓楽街・仮面の劇場",
+      "file": "stage-05-lantern-quarter.png",
+      "width": 1672,
+      "height": 941,
+      "bytes": 2987482
+    },
+    {
+      "stage": 6,
+      "title": "雪の国境城塞・最後の橋",
+      "file": "stage-06-snow-fortress.png",
+      "width": 1672,
+      "height": 941,
+      "bytes": 2934601
+    },
+    {
+      "stage": 7,
+      "title": "白い救済都市・静寂の大聖堂",
+      "file": "stage-07-salvation-city.png",
+      "width": 1672,
+      "height": 941,
+      "bytes": 2718689
+    }
+  ]
+}
