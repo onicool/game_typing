@@ -32,23 +32,36 @@ export function createSettingsStore(onIssue: (issue: 'invalid' | 'unavailable' |
     onIssue([...issues.values()].includes('invalid') ? 'invalid' : issues.size ? 'unavailable' : null);
   };
   const reportReadable = (key: string) => report(key, unsaved.has(key) ? 'unavailable' : 'persistent');
+  function read<T>(key: string, fallback: T, validate: (value: unknown) => value is T, fresh: boolean): T {
+    validators.set(key, validate);
+    let value = fallback;
+    try {
+      const raw = storage().getItem(`icebreaker.${key}`);
+      if (raw !== null) {
+        let parsed: unknown;
+        try { parsed = JSON.parse(raw); } catch {
+          report(key, 'invalid');
+          return (memory.get(key) as T | undefined) ?? fallback;
+        }
+        if (validate(parsed)) { value = parsed; reportReadable(key); }
+        else {
+          report(key, 'invalid');
+          return (memory.get(key) as T | undefined) ?? fallback;
+        }
+      } else reportReadable(key);
+    } catch {
+      report(key, 'unavailable');
+      return (memory.get(key) as T | undefined) ?? fallback;
+    }
+    return fresh ? value : (memory.get(key) as T | undefined) ?? value;
+  }
   return {
     get<T>(key: string, fallback: T, validate: (value: unknown) => value is T): T {
-      validators.set(key, validate);
-      let value = fallback;
-      try {
-        const raw = storage().getItem(`icebreaker.${key}`);
-        if (raw !== null) {
-          let parsed: unknown;
-          try { parsed = JSON.parse(raw); } catch {
-            report(key, 'invalid');
-            return (memory.get(key) as T | undefined) ?? fallback;
-          }
-          if (validate(parsed)) { value = parsed; reportReadable(key); }
-          else report(key, 'invalid');
-        } else reportReadable(key);
-      } catch { report(key, 'unavailable'); }
-      return (memory.get(key) as T | undefined) ?? value;
+      return read(key, fallback, validate, false);
+    },
+    /** Read another tab's latest validated data without discarding unsaved page memory. */
+    refresh<T>(key: string, fallback: T, validate: (value: unknown) => value is T): T {
+      return read(key, fallback, validate, true);
     },
     set(key: string, value: unknown): SettingsWriteStatus {
       const validate = validators.get(key);

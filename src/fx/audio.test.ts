@@ -25,6 +25,17 @@ function install(ctx = device()) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('optional audio never blocks gameplay', () => {
+  it('raises the key pitch one semitone per combo tier independently of rhythm stage', () => {
+    const { ctx } = install(); const audio = new Audio(); audio.ensure();
+    audio.key(0, false);
+    const base = ctx.createOscillator.mock.results[0].value.frequency.value;
+    audio.reset(); audio.key(3, false, 2);
+    expect(ctx.createOscillator.mock.results[2].value.frequency.value / base).toBeCloseTo(2 ** (2 / 12));
+    audio.comboBreak();
+    expect(ctx.createOscillator.mock.results[4].value.frequency.exponentialRampToValueAtTime).toHaveBeenCalledWith(220, 1.12);
+    audio.enabled = false; audio.comboBreak();
+    expect(ctx.createOscillator).toHaveBeenCalledTimes(5);
+  });
   it('contains a combat-cue device failure without retrying on each frame', () => {
     const { ctx, constructor } = install();
     const audio = new Audio(); audio.ensure();

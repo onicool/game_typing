@@ -154,18 +154,18 @@ export class Audio {
   }
 
   /** Accepted keystroke. stage = overclock 0..3 */
-  key(stage: number, critical: boolean) {
-    this.play(() => this.synthKey(stage, critical));
+  key(stage: number, critical: boolean, comboTier = 0) {
+    this.play(() => this.synthKey(stage, critical, comboTier));
   }
 
-  private synthKey(stage: number, critical: boolean) {
+  private synthKey(stage: number, critical: boolean, comboTier: number) {
     const ctx = this.live();
     if (!ctx) return;
     const t = ctx.currentTime;
     const chord = PROGRESSIONS[this.progressionIdx][this.chordIdx];
     const step = ARP[this.arpIdx % ARP.length];
     this.arpIdx++;
-    const midi = chord[step % 3] + 12 * Math.floor(step / 3) + 12;
+    const midi = chord[step % 3] + 12 * Math.floor(step / 3) + 12 + Math.max(0, Math.min(3, comboTier));
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
@@ -216,6 +216,18 @@ export class Audio {
     this.play(() => this.synthMiss());
   }
 
+  comboBreak() {
+    this.play(() => {
+      const ctx = this.live();
+      if (!ctx) return;
+      const t = ctx.currentTime, tone = ctx.createOscillator(), gain = ctx.createGain();
+      tone.type = 'sine'; tone.frequency.setValueAtTime(440, t);
+      tone.frequency.exponentialRampToValueAtTime(220, t + .12);
+      gain.gain.setValueAtTime(.06, t); gain.gain.exponentialRampToValueAtTime(.001, t + .14);
+      tone.connect(gain); gain.connect(this.master); tone.start(t); tone.stop(t + .16);
+    });
+  }
+
   /** Theatrical enemy cues; optional and independent of typing/chord progress. */
   combatCue(kind: 'windup' | 'guard' | 'impact') {
     this.play(() => {
@@ -227,6 +239,15 @@ export class Audio {
       gain.gain.setValueAtTime(.045, t);
       gain.gain.exponentialRampToValueAtTime(.001, t + .16);
       tone.connect(gain); gain.connect(this.master); tone.start(t); tone.stop(t + .18);
+    });
+  }
+
+  battleCue(kind: 'windup' | 'parry' | 'crack' | 'special' | 'victory') {
+    this.play(() => {
+      const ctx = this.live(); if (!ctx) return;
+      const t = ctx.currentTime;
+      const notes = { windup: [220], parry: [660, 880], crack: [140, 92], special: [660, 990, 1320], victory: [523.25, 659.25, 783.99] }[kind];
+      notes.forEach((freq, i) => this.voice(t + i * .045, 'sine', freq, kind === 'victory' ? .5 : .2, .045, 8000));
     });
   }
 

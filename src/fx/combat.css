@@ -20,3 +20,110 @@
 @media(max-width:620px) {
   #angel-ui-studio .av-combat-scene { height:136px; }
 }
+/* Chapter HUD and defense cues remain outside the clipped effects arena. */
+#angel-ui-studio .av-boss-hud { margin-top:10px; font-size:11px; }
+#angel-ui-studio .av-boss-hud>div:first-child { display:flex; justify-content:space-between; gap:8px; }
+#angel-ui-studio .av-boss-track { height:8px; background:#071b31; border:1px solid #d9b876; margin-top:5px; overflow:hidden; border-radius:6px; }
+#angel-ui-studio .av-boss-track i { display:block; height:100%; width:100%; background:linear-gradient(90deg,#72dced,#f6dd9d); }
+#angel-ui-studio .av-barrier { font-size:12px; margin-top:9px; color:#b4f8ff; }
+#angel-ui-studio .av-ring-streak { font-size:11px; margin-top:4px; }
+#angel-ui-studio .av-defense-note { font-size:12px; margin-top:10px; color:#ffe0a1; }
+#angel-ui-studio .av-battle-feedback { font-size:12px; min-height:36px; margin-top:7px; }
+#angel-ui-studio .av-next, #angel-ui-studio .av-later { position:relative; }
+#angel-ui-studio .av-defense-word { outline:2px solid #ffc76f; outline-offset:3px; }
+#angel-ui-studio .av-defense-arc, #angel-ui-studio .av-defense-tag { display:none; }
+#angel-ui-studio .av-defense-word>.av-defense-arc { display:block; position:absolute; top:2px; right:2px; width:25px; height:25px; pointer-events:none; }
+#angel-ui-studio .av-defense-arc circle { fill:#0d2237; stroke:#ffc76f; stroke-width:2; }
+#angel-ui-studio .av-defense-word>.av-defense-tag { display:block; position:absolute; top:-14px; left:8px; padding:0 4px; font-size:10px; color:#ffe0a1; background:#0d2237; }
+#angel-ui-studio .av-defense-word.av-next { padding-right:32px; }
+#angel-ui-studio .av-defense-word.av-later { padding-top:30px; }
+#angel-ui-studio .av-defense-word.av-main-panel .av-input-top { padding-right:30px; }
+#angel-ui-studio .av-chapter-dialog { position:fixed; inset:0; z-index:40; display:grid; place-items:center; padding:16px; background:#071b31d9; overflow:auto; }
+#angel-ui-studio .av-conversation-card { width:min(100%,600px); box-sizing:border-box; padding:32px; border:1px solid #d9b876; border-radius:8px; background:#102d45; box-shadow:0 10px 50px #0007; }
+#angel-ui-studio #chapter-line { font-family:"Yu Mincho",serif; font-size:24px; line-height:1.9; min-height:110px; overflow-wrap:anywhere; }
+#angel-ui-studio .av-conversation-footer { display:flex; gap:16px; justify-content:space-between; align-items:center; flex-wrap:wrap; }
+#angel-ui-studio .av-conversation-footer span { font-size:12px; color:#b8cbda; }
+#angel-ui-studio .av-battle-results { display:flex; gap:16px; flex-wrap:wrap; padding:16px; border:1px solid #d9b876; border-radius:6px; }
+#angel-ui-studio .av-difficulty { font-size:13px; }
+@media(max-width:620px) {
+  #angel-ui-studio .av-conversation-card { padding:20px; }
+  #angel-ui-studio #chapter-line { font-size:22px; }
+  #angel-ui-studio .av-defense-word.av-next { margin-right:4px; }
+}
+#angel-ui-studio .av-chapter-dialog { --av-paper:#142d43; --av-line:#375064; --av-muted:#bdcddd; --av-gold:#ecd29b; color:#f1f4f5; font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif; }
+#angel-ui-studio .av-battle:has(#boss-hud) #battle-feedback:empty,
+#angel-ui-studio .av-battle:has(#boss-hud) #defense-note:empty { display:none; }
+@media(min-width:621px) and (max-height:800px) {
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-hud { padding-top:10px; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-pilot-name { margin:3px 0; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-stage-name { margin:4px 0; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-arena { min-height:130px; padding-top:6px; padding-bottom:6px; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-combat-scene { height:136px; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-barrier { margin-top:4px; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-ring-streak { margin-top:0; font-size:10px; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-quest-title { font-size:15px; margin:6px 0; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-current-word { font-size:34px; margin-top:8px; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-romaji { font-size:22px; margin-top:4px; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-main-panel { padding-top:10px; padding-bottom:10px; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-defense-note { margin-top:4px; font-size:11px; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-battle-feedback { min-height:20px; margin-top:4px; font-size:11px; }
+}
+@media(min-width:621px) and (max-height:650px) {
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-combat-scene { height:96px; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-current-word { font-size:30px; }
+}
+@media(max-width:620px) {
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-combat-dock { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-main-panel { grid-column:1/-1; grid-row:1; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-combat-dock>.av-meter { grid-column:1; grid-row:2; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-right-side { grid-column:2; grid-row:2; min-width:0; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-romaji { font-size:21px; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-input-top { flex-direction:row; align-items:center; }
+  #angel-ui-studio .av-battle:has(#boss-hud) .av-next { display:flex; }
+}
+/* Keep both promised words and live battle information beside compact input. */
+#angel-ui-studio .av-battle:is(:has(#boss-hud),.av-study-practice).av-compact-chapter .av-combat-dock { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; }
+#angel-ui-studio .av-battle:is(:has(#boss-hud),.av-study-practice).av-compact-chapter .av-main-panel { grid-column:1/-1; grid-row:1; }
+#angel-ui-studio .av-battle:is(:has(#boss-hud),.av-study-practice).av-compact-chapter .av-combat-dock>.av-meter { grid-column:1; grid-row:2; }
+#angel-ui-studio .av-battle:is(:has(#boss-hud),.av-study-practice).av-compact-chapter .av-right-side { grid-column:2; grid-row:2; min-width:0; }
+#angel-ui-studio .av-compact-battle-info { font-size:11px; margin-top:6px; padding:6px 8px; border:1px solid #375064; border-radius:4px; }
+#angel-ui-studio .av-compact-vitals { display:flex; gap:8px; justify-content:space-between; }
+#angel-ui-studio .av-battle:is(:has(#boss-hud),.av-study-practice).av-compact-chapter .av-defense-note { margin-top:2px; }
+#angel-ui-studio .av-battle:is(:has(#boss-hud),.av-study-practice).av-compact-chapter .av-battle-feedback { margin-top:0; min-height:18px; line-height:1.5; }
+#angel-ui-studio .av-chapter-queue { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px; }
+#angel-ui-studio .av-chapter-queue .av-next, #angel-ui-studio .av-chapter-queue .av-later { display:block; margin:0; padding:8px; border:1px solid #375064; border-radius:4px; text-align:left; min-width:0; }
+#angel-ui-studio .av-chapter-queue .av-next>div { margin:0; min-width:0; }
+#angel-ui-studio .av-chapter-queue .av-next strong, #angel-ui-studio .av-chapter-queue .av-later strong { font-size:16px; line-height:1.5; min-height:24px; margin-top:2px; }
+#angel-ui-studio .av-chapter-queue .av-guide { font-size:11px; line-height:1.4; min-height:2.8em; margin-top:2px; }
+#angel-ui-studio .av-chapter-queue .av-defense-word { padding-right:30px; }
+#angel-ui-studio .av-chapter-queue .av-defense-arc { top:8px; }
+#angel-ui-studio .av-battle:is(:has(#boss-hud),.av-study-practice).av-compact-chapter .av-current-word { font-size:clamp(25px,4vw,34px); min-height:2.7em; margin:6px 0 2px; line-height:1.35; }
+#angel-ui-studio .av-battle:is(:has(#boss-hud),.av-study-practice).av-compact-chapter .av-romaji { font-size:clamp(20px,3vw,24px); min-height:2.9em; margin-top:4px; line-height:1.45; }
+@media(max-width:500px) {
+  #angel-ui-studio .av-chapter-queue { grid-template-columns:1fr; gap:10px; }
+  #angel-ui-studio .av-chapter-queue .av-next, #angel-ui-studio .av-chapter-queue .av-later { display:grid; grid-template-columns:54px minmax(0,1fr); align-items:center; gap:8px; padding:6px; }
+  #angel-ui-studio .av-chapter-queue .av-defense-word { padding-right:30px; }
+  #angel-ui-studio .av-chapter-queue .av-next>span:first-child, #angel-ui-studio .av-chapter-queue .av-later>span:first-child { font-size:11px; }
+}
+#angel-ui-studio .av-battle:is(:has(#boss-hud),.av-study-practice).av-compact-chapter #battle-feedback { min-height:33px; }
+#angel-ui-studio .av-battle:is(:has(#boss-hud),.av-study-practice).av-compact-chapter #battle-feedback:empty { display:block; }
+/* First-chapter presentation trial: existing rig against a quiet, fixed backing.
+   Real Battle events own both cards. They never cover input or move the page. */
+#angel-ui-studio .av-first-chapter-combat { position:relative; }
+#angel-ui-studio .av-first-chapter-combat .combat-body { stroke-width:2.5; }
+#angel-ui-studio .av-first-chapter-combat .av-combat-vector:not([data-phase=finale]) .combat-hit-badge { display:none; }
+#angel-ui-studio .av-combat-cues { position:absolute; inset:0; pointer-events:none; }
+#angel-ui-studio .av-combat-cue {
+  position:absolute; max-width:calc(50% - 12px); padding:5px 7px;
+  border:1px solid #87d9e9; border-radius:5px; background:#0d2237;
+  color:#e7fbff; font-size:12px; line-height:1.5; text-align:left;
+}
+#angel-ui-studio .av-combat-cue b { display:flex; align-items:center; gap:5px; font-weight:600; white-space:nowrap; }
+#angel-ui-studio .av-combat-cue i { font-style:normal; font-size:16px; line-height:1; }
+#angel-ui-studio .av-combat-cue small { display:block; padding-left:18px; font-size:10px; color:#bdcddd; }
+#angel-ui-studio .av-combat-attack-cue { right:max(4px,calc(50% - 160px)); top:4px; }
+#angel-ui-studio .av-combat-outcome-cue { left:max(4px,calc(50% - 160px)); top:4px; }
+#angel-ui-studio .av-combat-outcome-cue[data-kind=impact] { border-color:#f0af96; color:#ffe0d1; }
+#angel-ui-studio .av-first-chapter .av-obstacle-note { font-size:12px; line-height:1.5; }
+#angel-ui-studio .av-battle.av-first-chapter:has(#boss-hud) #battle-feedback { font-size:12px; line-height:1.5; min-height:36px; color:#e7fbff; }
+#angel-ui-studio .av-battle.av-first-chapter:has(#boss-hud) #battle-feedback:empty { display:block; }
