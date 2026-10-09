@@ -1,12 +1,45 @@
 import type { StoredKey } from './types';
+import type { Character } from '../game/journey';
+import type { Rank } from '../game/score';
+import type { Difficulty } from '../game/battle';
 
-type SessionMeta = {
+export type SessionMeta = {
   session: string;
   dict: string;
   mode: string;
   kanaPerSec: number;
   accuracy: number;
   endedAt: number;
+  character?: Character;
+  score?: number;
+  rank?: Rank | null;
+  routeVersion?: number;
+  elapsedMs?: number;
+  scope?: 'route' | 'chapter' | 'boss';
+  seed?: number;
+  difficulty?: Difficulty;
+  /** Hard-mode rules are versioned independently of unchanged normal chapters. */
+  seraphVersion?: number;
+  outcome?: 'cleared' | 'lost' | 'quit';
+  endReason?: 'finish' | 'word-limit' | 'defeat' | 'user';
+  parentSession?: string;
+  /** Optional, flat metadata: legacy rows and the IndexedDB schema stay valid. */
+  trainingForSession?: string;
+  trainingSession?: string;
+  trainingWords?: number;
+  bossAttempts?: number;
+  bossAccuracy?: number | null;
+  bossParries?: number;
+  bossResolved?: number;
+  bossCracks?: number;
+  bossResets?: number;
+  /** Calendar identity is captured at start, never recomputed when saving. */
+  dailyDate?: string;
+  dailyZone?: string;
+  dailyVersion?: number;
+  /** Collection claim committed with this session; the collection is a union. */
+  memoryVersion?: number;
+  memoryBits?: number;
 };
 interface EventRecord { session: string; dict: string; endedAt: number; events: StoredKey[] }
 /** A persistent result is returned only after both stores commit. */
@@ -73,9 +106,7 @@ function copyEvents(events: StoredKey[]): StoredKey[] {
   return events.map(event => ({ ...event, expected: [...event.expected] }));
 }
 
-export async function saveSession(events: StoredKey[], meta: {
-  session: string; dict: string; mode: string; kanaPerSec: number; accuracy: number; endedAt: number;
-}): Promise<SessionSaveStatus> {
+export async function saveSession(events: StoredKey[], meta: SessionMeta): Promise<SessionSaveStatus> {
   // Retain complete snapshots until commit: quota, privacy restrictions, or a
   // closed connection can fail after opening. A retry replaces, never doubles.
   const savedMeta = { ...meta };
@@ -217,9 +248,7 @@ export async function loadEvents(dict?: string, unavailable?: () => void, signal
   return result;
 }
 
-export async function loadSessions(dict?: string, unavailable?: () => void, signal?: AbortSignal): Promise<{
-  session: string; dict: string; mode: string; kanaPerSec: number; accuracy: number; endedAt: number;
-}[]> {
+export async function loadSessions(dict?: string, unavailable?: () => void, signal?: AbortSignal): Promise<SessionMeta[]> {
   const records = new Map((await readRecords<SessionMeta>('sessions', dict, unavailable, signal)).map(meta => [meta.session, meta]));
   if (signal?.aborted) return [];
   for (const [session, saved] of memory) records.set(session, saved.meta);

@@ -1,5 +1,6 @@
 import type { Word } from '../content/words';
 import { normalizeReading } from '../engine/romaji';
+import type { BattleEvent, BattleSnapshot } from '../game/battle';
 
 export type CombatPhase = 'idle' | 'windup' | 'approach' | 'guard' | 'impact' | 'recover';
 export type CombatHit = 'key' | 'milestone' | 'word';
@@ -27,9 +28,9 @@ export function crossedMilestone(word: Word, before: number, after: number): boo
 }
 const strength = { key: 1, milestone: 2, word: 3 } as const;
 const labels: Record<CombatPhase, string> = {
-  idle: '輪腕衛機〈仮〉 · 言葉で光の術を放つ', windup: '予兆 · 輪腕に光が集まる',
-  approach: '反撃が接近 · 自分のペースで入力', guard: '防御 · 青い結界が受け止めた',
-  impact: '結界への衝撃 · 入力への影響なし', recover: '構えを戻す · 次の言葉を唱えよう',
+  idle: '門の守護機〈仮〉 · 言葉で光の術を放つ', windup: '予兆 · 輪腕に光が集まる',
+  approach: '反撃が接近 · 防御の言葉を唱える', guard: '弾き返し · 青い結界が受け止めた',
+  impact: '結界にひび · 祈りを続けよう', recover: '構えを戻す · 次の言葉を唱えよう',
 };
 
 /** Original vector placeholder for the unconfirmed ring-bracer design B.
@@ -63,9 +64,32 @@ export class CombatScene {
   private previousPhase: CombatPhase = 'idle';
   private options: CombatOptions = { motion: true, low: false, intensity: 1 };
   private previousLabel = '';
-  constructor(host: HTMLElement, private label: HTMLElement, private cue: (kind: 'windup' | 'guard' | 'impact') => void) {
+  private comboTier = 0;
+  private inFinale = false;
+  private contactAt = -Infinity;
+  private contactPhase: CombatPhase = 'guard';
+  private specialAt = -Infinity;
+  private specialKind: 'judgment' | 'ring' | null = null;
+  private judgment: SVGElement;
+  private rings: SVGElement[];
+  private prayerPath: SVGElement | null;
+  private attackCue: HTMLElement | null;
+  private attackDetail: HTMLElement | null;
+  private contactCue: HTMLElement | null;
+  private contactText: HTMLElement | null;
+  private damageAt = -Infinity;
+  private damageSpecial: 'judgment' | 'ring' | null = null;
+  constructor(host: HTMLElement, private label: HTMLElement, private cue: (kind: 'windup' | 'guard' | 'impact') => void, private idleLabel = labels.idle, private firstChapter = false) {
+    host.classList.toggle('av-first-chapter-combat', firstChapter);
+    const trajectory = firstChapter ? 'M94 125Q58 160 68 203' : 'M94 125Q98 175 154 209';
+    const arrow = firstChapter ? 'M57 193L68 203 77 190' : 'M138 204L154 209 149 194';
     host.innerHTML = `<svg class="av-combat-vector" viewBox="0 0 360 260" aria-hidden="true">
       <defs><linearGradient id="machine-metal" x2=".8" y2="1"><stop stop-color="#fff7df"/><stop offset=".5" stop-color="#d9e4ec"/><stop offset="1" stop-color="#667f97"/></linearGradient></defs>
+      ${firstChapter ? `<g class="combat-machine-backdrop" fill="none">
+        <ellipse cx="182" cy="128" rx="112" ry="118" fill="#0d2237" fill-opacity=".92" stroke="#56758c" stroke-width="2"/>
+        <path d="M110 50Q182 0 254 50M110 208Q182 258 254 208" stroke="#c9ad78" stroke-width="2"/>
+        <path d="M77 116H90M274 116H287M182 16V28" stroke="#87b4c6" stroke-width="2"/>
+      </g>` : ''}
       <ellipse cx="180" cy="236" rx="66" ry="9" fill="#071b31" opacity=".55"/>
       <g class="combat-body" stroke="#bc9b61" stroke-width="2" stroke-linejoin="round" fill="url(#machine-metal)">
         <path d="M161 151L157 177 145 215 146 231 163 232 180 182 184 155M193 154L194 184 208 223 206 234 228 234 224 217 219 177 214 151"/>
@@ -88,12 +112,13 @@ export class CombatScene {
       </g>
       <ellipse class="combat-warning" cx="94" cy="125" rx="37" ry="42" fill="none" stroke="#ffc76f" stroke-width="3" stroke-dasharray="8 6" opacity="0"/>
       <g class="combat-trajectory" fill="none" stroke="#ffc76f" stroke-width="2" opacity="0">
-        <path d="M94 125Q98 175 154 209" stroke="#102d45" stroke-width="6" stroke-linecap="round" stroke-dasharray="4 5"/>
-        <path d="M138 204L154 209 149 194" stroke="#102d45" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M94 125Q98 175 154 209" stroke-dasharray="4 5"/>
-        <path d="M138 204L154 209 149 194" stroke-linejoin="round"/>
+        <path d="${trajectory}" stroke="#102d45" stroke-width="6" stroke-linecap="round" stroke-dasharray="4 5"/>
+        <path d="${arrow}" stroke="#102d45" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="${trajectory}" stroke-dasharray="4 5"/>
+        <path d="${arrow}" stroke-linejoin="round"/>
       </g>
       <path class="combat-bolt" d="M-12 -10Q5 -14 15 0Q5 14 -12 10L-2 0Z" fill="#ffc76f" stroke="#fff0c9" stroke-width="1.5" opacity="0"/>
+      ${firstChapter ? '<g class="combat-player-barrier" transform="translate(-86 -6)">' : ''}
       <ellipse class="combat-guard" cx="154" cy="209" rx="55" ry="17" fill="#73dff224" stroke="#87edff" stroke-width="3" opacity="0"/>
       <g class="combat-guard-mark" stroke="#b9f5ff" stroke-width="3" fill="#102d45" opacity="0">
         <path d="M154 185L170 190 168 206 154 219 140 206 138 190Z"/>
@@ -106,7 +131,14 @@ export class CombatScene {
       <g class="combat-contact" fill="none" stroke="#ffc76f" stroke-width="3" opacity="0">
         <path d="M117 186L127 192M111 207L123 205M180 186L171 193M194 207L181 205"/>
       </g>
+      ${firstChapter ? '</g>' : ''}
+      ${firstChapter ? `<g class="combat-prayer-path" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0">
+        <path d="M68 203Q112 140 174 94M162 98L174 94 173 107" stroke="#071b31" stroke-width="7"/>
+        <path d="M68 203Q112 140 174 94M162 98L174 94 173 107" stroke="#b4f8ff" stroke-width="3"/>
+      </g>` : ''}
       <path class="combat-beam" d="M113 244L179 82L186 91L121 248Z" fill="#a3f1ff" opacity="0"/>
+      <path class="combat-judgment" d="M177 0L197 4 188 232 170 250 177 170Z" fill="#fff0b5" opacity="0"/>
+      <g class="combat-rings" fill="none" stroke="#b4f8ff" stroke-width="5">${[0, 1, 2].map(i => `<ellipse cx="${170 + i * 12}" cy="${60 + i * 22}" rx="35" ry="12" opacity="0"/>`).join('')}</g>
       <circle class="combat-hit-ring" cx="182" cy="82" r="26" fill="none" stroke="#a5efff" stroke-width="2" stroke-dasharray="14 5" opacity="0"/>
       <path class="combat-star" d="M182 61L189 77 209 80 190 87 183 109 176 89 158 83 175 78Z" fill="#e7fbff" opacity="0"/>
       <g class="combat-shards" fill="#a0eaf4">${Array.from({ length: 12 }, () => '<path d="M0 -6L3 0 0 6 -3 0Z" opacity="0"/>').join('')}</g>
@@ -115,7 +147,10 @@ export class CombatScene {
         <path d="M247 29L251 37 247 45 243 37Z" fill="#a5efff"/>
         <text class="combat-hit-text" x="288" y="44" text-anchor="middle" fill="#e7fbff" font-size="20">強打</text>
       </g>
-    </svg>`;
+    </svg>${firstChapter ? `<div class="av-combat-cues" aria-hidden="true">
+      <span class="combat-attack-cue av-combat-cue av-combat-attack-cue" hidden><b><i>↑</i>祈り命中</b><small class="combat-attack-detail">守護機へ</small></span>
+      <span class="combat-outcome-badge av-combat-cue av-combat-outcome-cue" hidden><b><i class="combat-outcome-icon">✓</i><span class="combat-outcome-text">防御成功</span></b><small>あなたの結界</small></span>
+    </div>` : ''}`;
     this.svg = host.querySelector('svg')!;
     const find = <T extends SVGElement>(cls: string) => this.svg.querySelector<T>(`.combat-${cls}`)!;
     this.body = find('body'); this.arm = find('arm'); this.core = find('core'); this.warning = find('warning');
@@ -123,32 +158,87 @@ export class CombatScene {
     this.trajectory = find('trajectory'); this.guardMark = find('guard-mark'); this.impactMark = find('impact-mark');
     this.contact = find('contact'); this.hitRing = find('hit-ring'); this.hitBadge = find('hit-badge'); this.hitText = find('hit-text');
     this.shards = [...this.svg.querySelectorAll<SVGElement>('.combat-shards path')];
+    this.judgment = find('judgment'); this.rings = [...this.svg.querySelectorAll<SVGElement>('.combat-rings ellipse')];
+    this.prayerPath = firstChapter ? find('prayer-path') : null;
+    this.attackCue = host.querySelector('.combat-attack-cue'); this.attackDetail = host.querySelector('.combat-attack-detail');
+    this.contactCue = host.querySelector('.combat-outcome-badge'); this.contactText = host.querySelector('.combat-outcome-text');
   }
   configure(options: CombatOptions) {
     this.options = options;
     // Settings are changed while paused: do not defer removal of motion to RAF.
     this.pending = 0; this.particles = []; this.hitAt = -Infinity; this.strongHitAt = -Infinity;
-    for (const el of [...this.shards, this.beam, this.star, this.bolt, this.hitRing, this.contact, this.hitBadge]) el.setAttribute('opacity', '0');
+    for (const el of [...this.shards, ...this.rings, this.judgment, this.beam, this.star, this.bolt, this.hitRing, this.contact, this.hitBadge]) el.setAttribute('opacity', '0');
     this.body.removeAttribute('transform'); this.arm.removeAttribute('transform');
     this.guard.removeAttribute('transform');
     this.hitRing.removeAttribute('transform');
   }
   hit(kind: CombatHit) { this.pending = Math.max(this.pending, strength[kind]); }
+  setComboTier(tier: number) { this.comboTier = Math.max(0, Math.min(3, tier)); }
+  /** Presentation timestamps only. HP, deadlines and outcomes belong to Battle. */
+  feedback(events: BattleEvent[], gameMs: number) {
+    for (const event of events) {
+      // Only actual Battle damage shows the target/direction cue. Key sparks do not.
+      if (event.type === 'damage') { this.damageAt = gameMs; this.damageSpecial = event.special; }
+      if (event.type === 'parry' || event.type === 'crack') {
+        this.contactAt = gameMs; this.contactPhase = event.type === 'parry' ? 'guard' : 'impact';
+      }
+      if (event.type === 'damage' && event.special) {
+        this.specialAt = gameMs; this.specialKind = event.special; this.hit('word');
+      }
+    }
+  }
+  render(snapshot: BattleSnapshot, gameMs: number) {
+    let phase: CombatPhase = 'idle', progress = 0;
+    if (snapshot.attack) {
+      const remaining = snapshot.attack.dueAt - gameMs;
+      phase = remaining <= 380 ? 'approach' : 'windup';
+      progress = phase === 'approach' ? Math.max(0, 1 - remaining / 380)
+        : (gameMs - snapshot.attack.startedAt) / (snapshot.attack.dueAt - snapshot.attack.startedAt);
+    } else if (gameMs - this.contactAt < COMBAT_CONTACT_MS) {
+      phase = this.contactPhase; progress = (gameMs - this.contactAt) / COMBAT_CONTACT_MS;
+    } else if (gameMs - this.contactAt < 1000) { phase = 'recover'; progress = (gameMs - this.contactAt - 600) / 400; }
+    this.paint(gameMs, phase, progress);
+  }
+  /** Independent animation clock: Round has already frozen its final time. */
+  finale(ms: number) {
+    const moving = this.options.motion && !this.options.low;
+    if (!this.inFinale) {
+      this.inFinale = true; this.particles = []; this.hitAt = -Infinity; this.strongHitAt = -Infinity;
+      this.damageAt = -Infinity;
+      this.lastBurst = -Infinity;
+      // Convert the final pending hit to this animation's independent clock.
+      this.pending = moving ? 3 : 0;
+    }
+    if (!moving) {
+      this.pending = 0;
+      this.paint(ms, 'idle', 0);
+    } else {
+      // The first 80ms hold the last pose; then flush the pending final word hit.
+      if (ms >= 80) this.paint(Math.max(0, ms - 80), 'idle', 0);
+      if (ms >= 80) this.body.setAttribute('transform', `translate(0 ${-Math.min(1, (ms - 80) / 260) * 9}) rotate(-6 182 158)`);
+    }
+    this.svg.dataset.phase = 'finale';
+    this.hitBadge.setAttribute('opacity', '1'); this.hitText.textContent = '道を開いた';
+    this.label.textContent = '決着 · 最後の祈りが届いた';
+  }
   tick(elapsed: number, started: boolean) {
-    const { motion, low, intensity } = this.options;
-    const moving = motion && !low;
     const { phase, progress } = started ? combatPhase(elapsed) : { phase: 'idle' as const, progress: 0 };
     if (phase !== this.previousPhase) {
       if (phase === 'windup' || phase === 'guard' || phase === 'impact') this.cue(phase);
       this.previousPhase = phase;
     }
+    this.paint(elapsed, phase, progress);
+  }
+  private paint(elapsed: number, phase: CombatPhase, progress: number) {
+    const { motion, low, intensity } = this.options;
+    const moving = motion && !low;
     this.svg.dataset.phase = phase;
     if (this.pending && (this.pending > 1 || elapsed - this.lastBurst >= 80)) {
       this.hitPower = this.pending; this.pending = 0;
       this.hitAt = elapsed; this.lastBurst = elapsed;
       // A following key cannot erase the completed-word feedback in this frame.
       if (this.hitPower > 1) { this.strongHitAt = elapsed; this.strongHitPower = this.hitPower; }
-      const count = !motion ? 0 : low ? 3 : this.hitPower === 3 ? 8 : this.hitPower === 2 ? 5 : 2;
+      const count = !moving ? 0 : (this.hitPower === 3 ? 8 : this.hitPower === 2 ? 5 : 2) + this.comboTier;
       const cap = low ? 4 : 12;
       for (let i = 0; i < count; i++) {
         if (this.particles.length === cap) this.particles.shift();
@@ -165,9 +255,11 @@ export class CombatScene {
     this.trajectory.setAttribute('opacity', phase === 'windup' || phase === 'approach' ? '1' : '0');
     this.bolt.setAttribute('opacity', moving && phase === 'approach' ? '1' : '0');
     // Quadratic curve exactly matches the persistent non-color-only direction cue.
-    const p = progress, bx = (1-p)**2*94 + 2*(1-p)*p*98 + p*p*154;
-    const by = (1-p)**2*125 + 2*(1-p)*p*175 + p*p*209;
-    const angle = Math.atan2(100*(1-p)+68*p, 8*(1-p)+112*p) * 180 / Math.PI;
+    const cx = this.firstChapter ? 58 : 98, cy = this.firstChapter ? 160 : 175;
+    const tx = this.firstChapter ? 68 : 154, ty = this.firstChapter ? 203 : 209;
+    const p = progress, bx = (1-p)**2*94 + 2*(1-p)*p*cx + p*p*tx;
+    const by = (1-p)**2*125 + 2*(1-p)*p*cy + p*p*ty;
+    const angle = Math.atan2(2*(cy-125)*(1-p)+2*(ty-cy)*p, 2*(cx-94)*(1-p)+2*(tx-cx)*p) * 180 / Math.PI;
     this.bolt.setAttribute('transform', `translate(${bx} ${by}) rotate(${angle})`);
     const defending = phase === 'guard' || phase === 'impact';
     this.guard.setAttribute('opacity', defending || (!moving && phase === 'approach') ? '1' : '0');
@@ -179,13 +271,22 @@ export class CombatScene {
     this.contact.setAttribute('opacity', phase === 'impact' ? '1' : '0');
     this.contact.setAttribute('transform', `translate(154 202) scale(${moving && phase === 'impact' ? 1 + progress * .3 : 1}) translate(-154 -202)`);
     this.beam.setAttribute('opacity', moving && this.hitPower > 1 && age < 180 ? String(1 - age / 180) : '0');
-    this.star.setAttribute('opacity', motion && age < 160 ? String((1 - age / 160) * .85) : '0');
+    this.star.setAttribute('opacity', moving && age < 160 ? String((1 - age / 160) * .85) : '0');
     const strongAge = elapsed - this.strongHitAt;
     this.hitRing.setAttribute('opacity', moving && strongAge < 320 ? String((1 - strongAge / 320) * .9) : '0');
     this.hitRing.setAttribute('transform', `translate(182 82) scale(${moving && strongAge < 320 ? 1 + strongAge / 320 * .35 : 1}) translate(-182 -82)`);
     // The badge is static even in reduced motion. Only words/milestones use it.
-    const badge = strongAge < 600 ? this.strongHitPower === 3 ? '強打' : '節目' : '';
+    const specialAge = elapsed - this.specialAt;
+    const specialActive = specialAge >= 0 && specialAge < (this.specialKind === 'judgment' ? 500 : 450);
+    this.judgment.setAttribute('opacity', specialActive && this.specialKind === 'judgment' ? String(moving ? 1 - specialAge / 500 : .85) : '0');
+    this.rings.forEach((ring, i) => {
+      const age = specialAge - i * 90;
+      ring.setAttribute('opacity', specialActive && this.specialKind === 'ring' && (!moving || age >= 0) ? String(moving ? Math.max(0, 1 - age / 270) : .85) : '0');
+      ring.setAttribute('transform', moving && specialActive ? `translate(182 82) scale(${1 + Math.max(0, age) / 900}) translate(-182 -82)` : '');
+    });
+    const badge = specialActive ? this.specialKind === 'judgment' ? '裁きの一撃' : '光輪連撃' : strongAge < 600 ? this.strongHitPower === 3 ? '強打' : '節目' : '';
     this.hitBadge.setAttribute('opacity', badge ? '1' : '0');
+    this.hitText.setAttribute('font-size', specialActive ? '14' : '20');
     if (badge !== this.lastHitBadge) { this.hitText.textContent = badge; this.lastHitBadge = badge; }
     this.shards.forEach((el, i) => {
       const p = this.particles[i];
@@ -194,7 +295,29 @@ export class CombatScene {
       el.setAttribute('transform', `translate(${182 + Math.cos(p.angle) * travel} ${82 + Math.sin(p.angle) * travel}) rotate(${p.angle * 180 / Math.PI})`);
       el.setAttribute('opacity', String((1 - f) * .8));
     });
-    const text = phase === 'idle' && age < 450 && this.hitPower > 1 ? this.hitPower === 3 ? '強打 · 一語の祈りが届いた' : '節目 · ひとつの文を届けた' : labels[phase];
+    let text = specialActive ? badge : phase === 'idle' && age < 450 && this.hitPower > 1 ? this.hitPower === 3 ? '強打 · 一語の祈りが届いた' : '節目 · ひとつの文を届けた' : phase === 'idle' ? this.idleLabel : labels[phase];
+    if (this.firstChapter) {
+      const damageAge = elapsed - this.damageAt, contactAge = elapsed - this.contactAt;
+      const attackVisible = damageAge >= 0 && damageAge < 600;
+      const contactVisible = contactAge >= 0 && contactAge < 1000;
+      const kind = this.contactPhase === 'guard' ? 'guard' : 'impact';
+      // The two fixed cards can coexist. Neither a special nor the next key erases defense.
+      if (this.attackCue!.hidden === attackVisible) this.attackCue!.hidden = !attackVisible;
+      if (this.contactCue!.hidden === contactVisible) this.contactCue!.hidden = !contactVisible;
+      const prayerOpacity = attackVisible ? '1' : '0';
+      if (this.prayerPath!.getAttribute('opacity') !== prayerOpacity) this.prayerPath!.setAttribute('opacity', prayerOpacity);
+      const detail = this.damageSpecial === 'judgment' ? '裁きの一撃' : this.damageSpecial === 'ring' ? '光輪連撃' : '守護機へ';
+      if (this.attackDetail!.textContent !== detail) this.attackDetail!.textContent = detail;
+      if (this.contactCue!.dataset.kind !== kind) {
+        this.contactCue!.dataset.kind = kind;
+        this.contactText!.textContent = kind === 'guard' ? '防御成功' : '結界にひび';
+        this.contactCue!.querySelector('i')!.textContent = kind === 'guard' ? '✓' : '!';
+      }
+      text = contactVisible ? kind === 'guard' ? '防御成功 · 反撃を弾き返した' : '被弾 · 結界にひび。祈りを続けよう'
+        : phase === 'windup' ? '守護機の反撃 · 金の枠の言葉で防御'
+        : phase === 'approach' ? '反撃が結界に接近 · 唱えきって防御'
+        : attackVisible ? '攻撃命中 · 守護機へ祈りが届いた' : text;
+    }
     if (text !== this.previousLabel) { this.label.textContent = text; this.previousLabel = text; }
   }
 }
