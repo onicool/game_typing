@@ -9,17 +9,20 @@ export const isCompatibleDifficulty = (meta: { difficulty?: unknown; seraphVersi
 export const difficultyText = (d: unknown): string => d === 'standard' ? '標準' : d === 'challenge' ? '挑戦' : d === 'seraph' ? '熾天' : '未対応の難度';
 export interface BattleConfig { character: Character; difficulty: Difficulty; bossHp: number; seed: number; initialKanaPerSec?: number }
 export interface WordView { index: number; kana: number }
-export interface InputView { current: WordView; remainingKana: number; previews: [WordView, WordView] }
+export interface InputView { current: WordView; remainingKana: number; remainingKeys?: number; previews: [WordView, WordView] }
 export type BattleEvent =
   | { type: 'damage'; amount: number; special: 'judgment' | 'ring' | null }
   | { type: 'windup'; marked: number[]; dueAt: number }
   | { type: 'parry' } | { type: 'crack'; cracks: number } | { type: 'restore'; cracks: number }
-  | { type: 'prayer-reset' } | { type: 'phase2' } | { type: 'victory' } | { type: 'defeat' };
+  | { type: 'prayer-reset' } | { type: 'phase2' } | { type: 'victory' } | { type: 'defeat' }
+  | { type: 'chip'; amount: number; guarded: boolean } | { type: 'combo'; clean: boolean };
 export interface BattleAttack { marked: number[]; completed: number[]; startedAt: number; dueAt: number }
 export interface BattleSnapshot {
   hp: number; bossHp: number; cracks: number; attack: BattleAttack | null; ringStreak: number;
   phase: 1 | 2; active: boolean; outcome: 'cleared' | 'lost' | null; kanaPerSec: number;
   stats: { parries: number; resolved: number; cracks: number; resets: number; specials: number };
+  duel?: { mode: 'attack' | 'defend'; startedAt: number; endsAt: number; accepted: number; target: number;
+    packets: number; remaining: number; guarded: number; nextAt: number; interval: number; guardHp: number };
 }
 
 /** Rules use only caller-supplied game time; no DOM, clocks, timers or storage. */

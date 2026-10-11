@@ -15,6 +15,8 @@ import type { Report, StoredKey, Vuln } from './stats/types';
 import { createSettingsStore, isBoolean, isDictionaryIndex, isEffectLevel, isNonNegativeNumber, isSpellingPreferences, isVolume } from './storage/settings';
 import { CHARACTERS, PLACES, RecentSpeed, isCharacter, isPlaceIndex, journeyDictionary, journeySource } from './game/journey';
 import { CombatScene, crossedMilestone } from './fx/combat';
+import { SideCombatScene } from './fx/side-combat';
+import { Duel } from './game/duel';
 import { chapterRank, comboTier, emptyScore, routeRank, routeStars, scoreInput } from './game/score';
 import { Battle, isDifficulty, isCompatibleDifficulty, difficultyText, SERAPH_VERSION, type BattleEvent, type InputView } from './game/battle';
 import { ChapterSource } from './game/chapter';
@@ -43,6 +45,7 @@ let character = settings.get('angel.character', 'elna', isCharacter);
 let place = settings.get('angel.place', 0, isPlaceIndex);
 let difficulty = settings.get('angel.difficulty', 'standard', isDifficulty);
 let dictIndex = settings.get('dict', DICTIONARIES.findIndex(d => d.id === 'jp-knowledge'), isDictionaryIndex(DICTIONARIES.length));
+const combatDictionaries: Dictionary[] = ['jp-knowledge', 'jp-knowledge-passages'].map((id, i) => ({ ...DICTIONARIES.find(d => d.id === id)!, id: `jp-duel-${i ? 'long' : 'short'}-v1`, name: `横視点バトル · ${i ? '長文' : '短文'}` }));
 const prefs = settings.get('prefs', {}, isSpellingPreferences);
 const audio = new Audio(); audio.enabled = settings.get('sound', true, isBoolean); audio.setVolume(settings.get('volume', 1, isVolume));
 const music = new Music();
@@ -56,7 +59,7 @@ let view: 'characters' | 'journey' | 'training' | 'records' | 'memories' | 'less
 let round: Round | null = null;
 type Run = { dict: Dictionary; mode: NonNullable<RoundOptions['mode']>; place: number; character: typeof character; focus?: string; vulns?: Vuln[];
   difficulty?: typeof difficulty; bossOnly?: boolean; parentSession?: string; initialKanaPerSec?: number; seed?: number;
-  study?: { lesson: BossLesson; trainingSession?: string; words?: number }; daily?: DailyChallenge };
+  study?: { lesson: BossLesson; trainingSession?: string; words?: number }; daily?: DailyChallenge; combatTrial?: boolean };
 let run: Run | null = null;
 let endedRound: Round | null = null;
 let scoring = emptyScore();
@@ -76,8 +79,8 @@ let reportMetric: 'latency' | 'miss' = 'latency';
 let panelWord: Word | undefined;
 let animations: Animation[] = [];
 let modal: 'pause-dialog' | 'settings-dialog' | null = null;
-let combat: CombatScene | null = null;
-let chapter: { definition: ChapterDefinition; battle: Battle; phase: 'intro' | 'route' | 'boss-intro' | 'boss' | 'outro'; previousWordAt: number; bossLogStart: number; initialBossSpeed: number } | null = null;
+let combat: CombatScene | SideCombatScene | null = null;
+let chapter: { definition: ChapterDefinition; battle: Battle | Duel; phase: 'intro' | 'route' | 'boss-intro' | 'boss' | 'outro'; previousWordAt: number; bossLogStart: number; initialBossSpeed: number } | null = null;
 let offeredLesson: BossLesson | null = null;
 let lesson: BossLesson | null = null;
 let conversation: { lines: Line[]; index: number; kind: 'intro' | 'boss-intro' | 'outro'; shownAt: number } | null = null;
@@ -157,19 +160,19 @@ function changeView(next: typeof view) {
 }
 function render() {
   if (view === 'characters') {
-    main.innerHTML = `<section class="av-page av-character-page"><div class="av-heading"><p class="av-eyebrow">空と祈り</p><h1 tabindex="-1">誰と旅に出る？</h1><p>言葉を唱えて、下界への道をひらこう。</p></div><div class="av-choice-grid">${Object.entries(CHARACTERS).map(([key, p]) => `<button type="button" class="av-choice" data-person="${key}" aria-pressed="${character === key}">${picture(`player-${key}`, p.name)}<div class="av-choice-copy"><strong>${p.name}</strong><p>${p.role}<br>「${p.quote}」</p></div></button>`).join('')}</div><div class="av-page-footer"><span>${CHARACTERS[character].name}を選択中</span>${action('この天使で旅に出る', 'map', 'primary')}${action('教養の短文を打つ', 'knowledge')}</div></section>`;
+    main.innerHTML = `<section class="av-page av-character-page"><div class="av-heading"><p class="av-eyebrow">空と祈り</p><h1 tabindex="-1">誰と旅に出る？</h1><p>言葉を唱えて、下界への道をひらこう。</p></div><div class="av-choice-grid">${Object.entries(CHARACTERS).map(([key, p]) => `<button type="button" class="av-choice" data-person="${key}" aria-pressed="${character === key}">${picture(`player-${key}`, p.name)}<div class="av-choice-copy"><strong>${p.name}</strong><p>${p.role}<br>「${p.quote}」</p></div></button>`).join('')}</div><div class="av-page-footer"><span>${CHARACTERS[character].name}を選択中</span>${action('横視点バトルを遊ぶ', 'combat-practice', 'primary')}${action('この天使で旅に出る', 'map')}${action('教養の短文を打つ', 'knowledge')}</div></section>`;
   } else if (view === 'journey') {
     refreshProgress();
     if (!placeOpen(place)) place = 0;
     const p = PLACES[place];
     main.innerHTML = `<section class="av-page"><div class="av-heading"><p class="av-eyebrow">SEVEN PLACES</p><h1 tabindex="-1">旅の地図</h1><p>7つの章で、出会う相手に言葉を届けます。前の章をクリアして、次の場所へ進みましょう。</p>${action("旅の記憶を見る", "memories")}</div>${dailyCard()}<div class="av-map">${PLACES.map((p, i) => `<button type="button" class="av-choice" data-place="${i}" aria-pressed="${i === place}" ${placeOpen(i) ? '' : 'disabled aria-describedby="chapter-unlock-note"'}>${picture(p.art, p.name)}<div class="av-choice-copy"><small>STAGE ${String(i + 1).padStart(2, '0')}</small><strong>${p.name}</strong><span>${p.sub}</span><span class="av-place-record">${esc(placeRecordText(i))}</span></div></button>`).join('')}</div><div class="av-page-footer"><span>${CHARACTERS[character].name} · ${p.name}を選択中</span><label class="av-difficulty">章の難度 <select id="journey-difficulty"><option value="standard" ${difficulty === 'standard' ? 'selected' : ''}>標準</option><option value="challenge" ${difficulty === 'challenge' ? 'selected' : ''}>挑戦</option><option value="seraph" ${difficulty === 'seraph' ? 'selected' : ''}>熾天</option></select></label>${action('この場所へ', 'start-journey', 'primary')}</div><p id="difficulty-note" class="av-footnote" role="status"></p><p id="chapter-unlock-note" class="av-footnote">前の章の現在版をクリアすると、第2〜7章の鍵がひらきます。標準で一度クリアしたら挑戦がおすすめ。</p></section>`;
   } else if (view === 'training') {
-    main.innerHTML = `<section class="av-page"><div class="av-heading"><p class="av-eyebrow">PRACTICE</p><h1 tabindex="-1">言葉を磨く</h1><p>雑学と先人の考え方を、打ちながら少しずつ学ぼう。</p></div><div class="av-training-grid"><section class="av-card"><h2>60秒の計測</h2><p>教養の短文と、従来の日本語・英語辞書を選べます。最初のキーで時計が動きます。</p><label>辞書 <select id="training-dict">${DICTIONARIES.map((d, i) => `<option value="${i}" ${i === dictIndex ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>${action('教養の短文を打つ', 'knowledge', 'primary')}${action('選んだ辞書で練習する', 'start-training')}<p class="av-footnote">中断した計測と長文・弱点練習は自己ベストの対象外。</p></section><section class="av-card"><h2>ゆっくり長文</h2><p>読みとローマ字が入力位置を追いかけます。時間制限なし。途中終了も記録できます。</p>${action('長文を練習する', 'start-passage')}<hr><h2>自分の弱点を知る</h2><p>記録から遅い指の遷移やミスを確認し、弱点に合わせた練習へ。</p>${action('練習記録を見る', 'records')}</section></div><p class="av-help">shi / si・chi / tiなどの別綴りに対応。IMEはオフ。ミスはそのまま打ち直し、Backspaceは不要です。</p></section>`;
+    main.innerHTML = `<section class="av-page"><div class="av-heading"><p class="av-eyebrow">PRACTICE</p><h1 tabindex="-1">言葉を磨く</h1><p>雑学と先人の考え方を、打ちながら少しずつ学ぼう。</p></div><div class="av-training-grid"><section class="av-card"><h2>60秒の計測</h2><p>教養の短文と、従来の日本語・英語辞書を選べます。最初のキーで時計が動きます。</p><label>辞書 <select id="training-dict">${DICTIONARIES.map((d, i) => `<option value="${i}" ${i === dictIndex ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>${action('教養の短文を打つ', 'knowledge', 'primary')}${action('選んだ辞書で練習する', 'start-training')}<p class="av-footnote">中断した計測と長文・弱点練習は自己ベストの対象外。</p></section><section class="av-card"><h2>横視点バトル</h2><p>正しい1文字が斬撃・迎撃になります。文を完成してコンボやパリィ。途中の入力も役立ちます。</p>${action('短文でバトル', 'combat-practice')}${action('長文でバトル', 'combat-long')}<hr><h2>ゆっくり長文</h2><p>読みとローマ字が入力位置を追いかけます。時間制限なし。途中終了も記録できます。</p>${action('長文を練習する', 'start-passage')}<hr><h2>自分の弱点を知る</h2><p>記録から遅い指の遷移やミスを確認し、弱点に合わせた練習へ。</p>${action('練習記録を見る', 'records')}</section></div><p class="av-help">shi / si・chi / tiなどの別綴りに対応。IMEはオフ。ミスはそのまま打ち直し、Backspaceは不要です。</p></section>`;
   } else if (view === 'lesson' && lesson) {
     const before = lesson.before, boss = getChapter(lesson.place)!;
     main.innerHTML = `<section class="av-page av-result" id="sera-lesson"><p class="av-eyebrow">セラの修行場</p><h1 tabindex="-1">次の祈りを、ここで整えましょう</h1><p class="av-help">セラ「${lesson.focus ? `『${esc(lesson.focus.label)}』の指づかいを確かめましょう。` : '今回は、同じ相手への祈りをゆっくり繰り返しましょう。'}」</p><section class="av-card"><h2>${esc(boss.bossName)}へ戻る修行</h2><p>${CHARACTERS[before.character!].name} · ${difficultyText(before.difficulty!)} · 戻ったらボス戦から始めます。</p><p>最初のキーから60秒。反撃はありません。Escから途中で終えて戻ることもできます。</p><p class="av-footnote">ボスの結果に合わせた祈りを練習し、戻ったあとはボス戦の正確率・弾き返し・ひびを比べます。このページを閉じると直接戻る道は終了します。</p></section><div class="av-page-footer">${action('修行を始める', 'study-start', 'primary')}${action('旅の地図', 'map')}</div></section>`;
   } else if (view === 'records') {
-    main.innerHTML = `<section class="av-page av-records"><h1 tabindex="-1">練習の記録</h1><div class="av-record-controls"><label>見る辞書 <select id="record-dict">${[...DICTIONARIES, ...PLACES.map((_, i) => getChapter(i) ? chapterDictionary(i) : journeyDictionary(i))].map(d => `<option value="${d.id}" ${d.id === recordDict.id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>${action('遅さ / ミス率を切り替える', 'metric')}${action('戻る', 'map')}</div><div id="report" class="rp" aria-busy="true"><p role="status">記録を読み込み中…</p></div></section>`;
+    main.innerHTML = `<section class="av-page av-records"><h1 tabindex="-1">練習の記録</h1><div class="av-record-controls"><label>見る辞書 <select id="record-dict">${[...DICTIONARIES, ...combatDictionaries, ...PLACES.map((_, i) => getChapter(i) ? chapterDictionary(i) : journeyDictionary(i))].map(d => `<option value="${d.id}" ${d.id === recordDict.id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>${action('遅さ / ミス率を切り替える', 'metric')}${action('戻る', 'map')}</div><div id="report" class="rp" aria-busy="true"><p role="status">記録を読み込み中…</p></div></section>`;
     void showRecords();
   } else if (view === 'memories') {
     refreshProgress();
@@ -257,14 +260,14 @@ function start(spec: Run) {
   refreshProgress();
   if (spec.mode === 'journey' && !journeyAllowed(spec.place, spec.difficulty ?? difficulty)) { changeView('journey'); return; }
   combat = null; chapter = null; conversation = null; finale = null; terminalEndedAt = null; comboBrokenUntil = 0; offeredLesson = null;
-  spec = { ...spec, ...(spec.mode === 'journey' && getChapter(spec.place) ? { dict: chapterDictionary(spec.place), difficulty: spec.difficulty ?? difficulty } : {}) };
+  spec = { ...spec, ...(spec.mode === 'journey' && getChapter(spec.place) ? { dict: spec.combatTrial ? spec.dict : chapterDictionary(spec.place), difficulty: spec.difficulty ?? difficulty } : {}) };
   read?.abort(); request++; report = undefined; run = { ...spec }; endedRound = null;
   const opts: RoundOptions = { mode: spec.mode, baselines: loadBaselines(spec.dict), seed: spec.seed ?? Math.floor(Math.random() * 2 ** 32) };
   if (spec.mode === 'journey') {
     const definition = getChapter(spec.place), isChapter = definition !== null;
-    opts.source = isChapter ? spec.study ? trainingBossSource(opts.seed!, spec.study.lesson.sourceBossOnly, spec.place) : new ChapterSource(opts.seed!, spec.bossOnly, spec.place) : journeySource(spec.dict);
+    opts.source = spec.combatTrial ? undefined : isChapter ? spec.study ? trainingBossSource(opts.seed!, spec.study.lesson.sourceBossOnly, spec.place) : new ChapterSource(opts.seed!, spec.bossOnly, spec.place) : journeySource(spec.dict);
     opts.wordLimit = isChapter ? CHAPTER_WORD_LIMIT : spec.dict.words.length;
-    if (isChapter) chapter = { definition: definition!, battle: new Battle({ character: spec.character, difficulty: spec.difficulty!, bossHp: 240, seed: opts.seed!, initialKanaPerSec: spec.initialKanaPerSec }), phase: spec.bossOnly ? 'boss' : 'intro', previousWordAt: 0, bossLogStart: -1, initialBossSpeed: 2 };
+    if (isChapter) chapter = { definition: definition!, battle: spec.combatTrial ? new Duel(opts.seed!) : new Battle({ character: spec.character, difficulty: spec.difficulty!, bossHp: 240, seed: opts.seed!, initialKanaPerSec: spec.initialKanaPerSec }), phase: spec.bossOnly ? 'boss' : 'intro', previousWordAt: 0, bossLogStart: -1, initialBossSpeed: 2 };
   }
   if (spec.mode === 'patch') {
     try { opts.source = new PatchSource(spec.dict.words, spec.dict.id, spec.vulns ?? [], prefs, { seed: opts.seed!, focus: spec.focus }); }
@@ -340,6 +343,7 @@ function advanceConversation(skip = false) {
 }
 function focusChapterInput() {
   const panel = $('input-panel'); panel.focus({ preventScroll: true });
+  if (combat instanceof SideCombatScene && innerWidth > 850) { window.scrollTo({ top: 0, behavior: 'instant' }); return; }
   panel.scrollIntoView({ block: compactChapter.matches ? 'center' : 'nearest', behavior: 'instant' });
 }
 function layoutChapter() {
@@ -363,16 +367,27 @@ function enterBoss() {
   main.querySelector('.av-battle')!.classList.toggle('av-first-chapter', firstChapter);
   host.insertAdjacentHTML('afterbegin', `<div class="av-combat-scene" role="img" aria-label="${esc(chapter.definition.bossName)}。${firstChapter ? '祈りは守護機へ、反撃はあなたの結界へ' : '光の輪から反撃する'}"></div>`);
   $('seal-note').setAttribute('aria-live', 'off');
-  combat = new CombatScene(host.querySelector('.av-combat-scene')!, $('seal-note'), kind => audio.combatCue(kind), `${chapter.definition.bossName} · 言葉で光の術を放つ`, firstChapter);
+  combat = firstChapter ? new SideCombatScene(host.querySelector('.av-combat-scene')!, $('seal-note'), run!.character)
+    : new CombatScene(host.querySelector('.av-combat-scene')!, $('seal-note'), kind => audio.combatCue(kind), `${chapter.definition.bossName} · 言葉で光の術を放つ`, false);
+  main.querySelector('.av-battle')!.classList.toggle('av-side-battle', firstChapter);
+  if (firstChapter) host.querySelector('.av-combat-scene')!.setAttribute('aria-label', '左の剣士と右の守護機。正しい1文字ごとに斬撃、または敵の弾を反射');
   $('boss-hud').hidden = false; main.querySelector('.av-quest-title')!.textContent = chapter.definition.bossQuest;
   main.querySelector('.av-route-label')!.textContent = `${chapter.definition.title} · ボス戦`; $('speech').textContent = chapter.definition.opening(run!.character);
   $('quest-note').textContent = '金の枠の言葉を期限までに完成させる';
+  if (run!.combatTrial) {
+    main.querySelector('.av-stage-name')!.textContent = '剣とことばの稽古';
+    main.querySelector('.av-route-label')!.textContent = '横視点バトル · 教養タイピング';
+    main.querySelector('.av-quest-title')!.textContent = '1文字ずつ、攻めて守る';
+    $('quest-note').textContent = '文を完成してコンボ／パリィ。途中の入力も成果になる';
+    $('input-label').textContent = '言葉を打つ · IME OFF';
+    $('boss-hp').setAttribute('aria-valuemax', String(chapter.battle.snapshot().bossHp));
+  }
   layoutChapter();
   applyEffects(); renderBattle(performance.now()); renderMeters(performance.now()); focusChapterInput();
 }
 function inputView(): InputView {
   const r = round!, kana = normalizeReading(r.word.reading).length;
-  return { current: { index: r.wordsDone, kana }, remainingKana: kana - r.session.kanaDone,
+  return { current: { index: r.wordsDone, kana }, remainingKana: kana - r.session.kanaDone, remainingKeys: r.session.guide.length - r.session.typed.length,
     previews: [{ index: r.wordsDone + 1, kana: normalizeReading(r.nextWord.reading).length },
       { index: r.wordsDone + 2, kana: normalizeReading(r.followingWord.reading).length }] };
 }
@@ -381,14 +396,16 @@ function battleEvents(events: BattleEvent[], now: number) {
   combat?.feedback(events, round.elapsedMs(now));
   const firstChapter = chapter.definition.key === 'heaven';
   for (const e of events) {
-    if (e.type === 'windup') { audio.battleCue('windup'); $('battle-feedback').textContent = e.marked.length === 2 ? '二語防御 · 金の枠を二つ唱える' : '予兆 · 金の枠の言葉で防御'; }
+    if (e.type === 'chip') { if (!e.guarded) audio.miss(); $('battle-feedback').textContent = e.guarded ? '部分ガード · 入力した分で1発を防いだ' : `小さな被弾 −${e.amount} · そのまま入力を続けよう`; }
+    else if (e.type === 'combo') { scoring.score += 120; audio.word(0); $('battle-feedback').textContent = e.clean ? 'コンボ完成！ 正確な入力で追加ボーナス' : 'コンボ完成！ 訂正しても最後まで届いた'; }
+    else if (e.type === 'windup') { audio.battleCue('windup'); $('battle-feedback').textContent = e.marked.length === 2 ? '二語防御 · 金の枠を二つ唱える' : '予兆 · 金の枠の言葉で防御'; }
     else if (e.type === 'parry') { scoring.score += 200; audio.battleCue('parry'); $('battle-feedback').textContent = firstChapter ? '防御成功 · 弾き返し！' : '弾き返し！'; }
     else if (e.type === 'crack') { audio.battleCue('crack'); $('battle-feedback').textContent = firstChapter ? '被弾 · 結界にひび' : '結界にひび · 次の祈りを続けよう'; }
     else if (e.type === 'damage' && e.special) {
       scoring.score += 100; audio.battleCue('special');
       setText('battle-feedback', `${events.some(event => event.type === 'parry') ? firstChapter ? '防御成功 · 弾き返し／' : '弾き返し · ' : firstChapter ? '攻撃命中 · ' : ''}${e.special === 'judgment' ? '裁きの一撃' : '光輪連撃'}！`);
     }
-    else if (e.type === 'damage' && firstChapter && !events.some(event => event.type === 'parry')) setText('battle-feedback', '攻撃命中 · 守護機へ祈りが届いた');
+    else if (e.type === 'damage' && firstChapter && !run!.combatTrial && !events.some(event => event.type === 'parry')) setText('battle-feedback', '攻撃命中 · 守護機へ祈りが届いた');
     else if (e.type === 'restore') $('battle-feedback').textContent = '光輪連撃 · 結界をひとつ回復';
     else if (e.type === 'prayer-reset') $('battle-feedback').textContent = '祈り直し · 結界が回復。祈りを続けよう';
     else if (e.type === 'phase2') $('speech').textContent = chapter.definition.phase2Line;
@@ -405,9 +422,9 @@ function renderBattle(now: number) {
   if ($('boss-hp').getAttribute('aria-valuenow') !== String(snapshot.hp)) $('boss-hp').setAttribute('aria-valuenow', String(snapshot.hp));
   const width = `${snapshot.hp / snapshot.bossHp * 100}%`;
   if ($('boss-hp-fill').style.width !== width) $('boss-hp-fill').style.width = width;
-  const barrier = `結界 · ひび ${snapshot.cracks} / 3 ${'◇'.repeat(3 - snapshot.cracks)}${'◆'.repeat(snapshot.cracks)}`;
-  setText('barrier', barrier); setText('compact-barrier', `ひび ${snapshot.cracks} / 3`);
-  setText('ring-streak', run?.character === 'towa' ? `光輪連撃 ${'●'.repeat(snapshot.ringStreak)}${'○'.repeat(3 - snapshot.ringStreak)}` : '裁きの一撃 · ミスなしの祈り');
+  const barrier = run?.combatTrial ? `ガード ${snapshot.duel?.guardHp ?? 100} / 100` : `結界 · ひび ${snapshot.cracks} / 3 ${'◇'.repeat(3 - snapshot.cracks)}${'◆'.repeat(snapshot.cracks)}`;
+  setText('barrier', barrier); setText('compact-barrier', run?.combatTrial ? barrier : `ひび ${snapshot.cracks} / 3`);
+  setText('ring-streak', run?.combatTrial ? '時間内の文完成でコンボ／パリィ' : run?.character === 'towa' ? `光輪連撃 ${'●'.repeat(snapshot.ringStreak)}${'○'.repeat(3 - snapshot.ringStreak)}` : '裁きの一撃 · ミスなしの祈り');
   const attack = snapshot.attack, marked = attack?.marked.filter(i => !attack.completed.includes(i)) ?? [];
   const remaining = attack ? Math.max(0, (attack.dueAt - gameMs) / (attack.dueAt - attack.startedAt)) : 0;
   [$('input-panel'), main.querySelector<HTMLElement>('.av-next')!, main.querySelector<HTMLElement>('.av-later')!].forEach((host, i) => {
@@ -416,6 +433,11 @@ function renderBattle(now: number) {
     host.querySelector(':scope > .av-defense-arc circle')!.setAttribute('stroke-dasharray', `${remaining * 100} 100`);
   });
   setText('defense-note', attack ? `防御まで ${Math.max(0, (attack.dueAt - gameMs) / 1000).toFixed(1)}秒 · 残り${marked.length}語` : '次の予兆に備えよう');
+  if (snapshot.duel) {
+    const d = snapshot.duel;
+    setText('defense-note', `${d.mode === 'defend' ? '防御' : '攻撃'} ${Math.max(0, (d.endsAt - gameMs) / 1000).toFixed(1)}秒 · ${d.accepted} / ${d.target}文字${d.mode === 'defend' ? ` · 反撃あと${d.remaining}回` : ''}`);
+    setText('ring-streak', '時間内の文完成でコンボ／パリィ');
+  }
 }
 function follow(container: HTMLElement, marker: HTMLElement | null) {
   if (!marker) return;
@@ -475,8 +497,8 @@ function renderMeters(now: number) {
   combat?.setComboTier(tier);
   $('combo-status').textContent = now < comboBrokenUntil ? 'コンボ途切れ' : tier > 0 ? `コンボ段階 ${tier}` : '';
   const elapsed = round.elapsedMs(now), untimed = run.mode === 'journey' || run.mode === 'passage';
-  $('clock').textContent = !round.started ? '最初のキーでスタート' : untimed ? `${Math.floor(elapsed / 60000)}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, '0')} · 時間制限なし` : `残り ${Math.ceil(round.remainingMs(now) / 1000)} 秒`;
-  const fraction = chapter ? chapter.phase === 'boss' ? 1 - chapter.battle.snapshot().hp / 240 : Math.min(1, round.wordsDone / CHAPTER_ROUTE_WORDS) : run.mode === 'journey' ? round.wordsDone / round.wordLimit : run.mode === 'passage' ? round.session.kanaDone / normalizeReading(round.word.reading).length : elapsed / 60000;
+  $('clock').textContent = !round.started ? '最初のキーでスタート' : untimed ? `${Math.floor(elapsed / 60000)}:${String(Math.floor(elapsed / 1000) % 60).padStart(2, '0')} · ${run.combatTrial ? '文ごとの時間は戦闘欄に表示' : '時間制限なし'}` : `残り ${Math.ceil(round.remainingMs(now) / 1000)} 秒`;
+  const fraction = chapter ? chapter.phase === 'boss' ? 1 - chapter.battle.snapshot().hp / chapter.battle.snapshot().bossHp : Math.min(1, round.wordsDone / CHAPTER_ROUTE_WORDS) : run.mode === 'journey' ? round.wordsDone / round.wordLimit : run.mode === 'passage' ? round.session.kanaDone / normalizeReading(round.word.reading).length : elapsed / 60000;
   $('quest-track').setAttribute('aria-valuenow', String(Math.min(100, fraction * 100))); $('quest-progress').style.width = `${Math.min(100, fraction * 100)}%`;
   $('quest-count').textContent = chapter ? chapter.phase === 'boss' ? `祈り ${round.wordsDone - (run.bossOnly ? 0 : 8)} 語` : `${Math.min(8, round.wordsDone)} / 8` : run.mode === 'journey' ? `${round.wordsDone} / ${round.wordLimit}` : `${round.wordsDone} 語`;
 }
@@ -559,7 +581,7 @@ function end() {
   const outcome: NonNullable<SessionMeta['outcome']> = battleResult?.outcome ?? (fullJourney ? 'cleared' : 'quit');
   const endReason: NonNullable<SessionMeta['endReason']> = outcome === 'lost' ? 'defeat' : outcome === 'cleared' ? 'finish' : battleResult && round.wordsDone >= round.wordLimit ? 'word-limit' : 'user';
   let progressStatus = '', personalBest = '';
-  if (fullJourney) {
+  if (fullJourney && !spec.combatTrial) {
     // A localStorage failure must never prevent the independent IndexedDB write.
     try {
       refreshProgress();
@@ -574,7 +596,7 @@ function end() {
         ? `${hard ? '熾天の' : '旅の'}成果をこのブラウザに保存しました。` : `${hard ? '熾天の' : '旅の'}成果はこのページでのみ保持`;
     } catch { progressStatus = `${spec.difficulty === 'seraph' ? '熾天の' : '旅の'}成果はこのページでのみ保持`; }
   }
-  const mode = spec.mode === 'journey' ? fullJourney ? 'journey' : 'practice' : spec.mode === 'patch' ? 'patch' : spec.mode === 'passage' || round.interrupted ? 'practice' : 'benchmark';
+  const mode = spec.combatTrial ? 'practice' : spec.mode === 'journey' ? fullJourney ? 'journey' : 'practice' : spec.mode === 'patch' ? 'patch' : spec.mode === 'passage' || round.interrupted ? 'practice' : 'benchmark';
   const bestKey = `pb.${spec.dict.id}`, best = settings.get(bestKey, 0, isNonNegativeNumber);
   if (mode === 'benchmark' && result.kanaPerSec > best) settings.set(bestKey, result.kanaPerSec);
   settings.set('prefs', prefs); updateBaselines(spec.dict, round.log);
@@ -583,7 +605,7 @@ function end() {
   lastSession = session;
   const meta: SessionMeta = { session, dict: spec.dict.id, mode, kanaPerSec: result.kanaPerSec, accuracy: result.accuracy,
     endedAt: terminalEndedAt!, character: spec.character, score: scoring.score, rank, elapsedMs, seed: round.seed,
-    ...(spec.mode === 'journey' ? { routeVersion: routeVersions[PLACES[spec.place].key], scope,
+    ...(spec.mode === 'journey' && !spec.combatTrial ? { routeVersion: routeVersions[PLACES[spec.place].key], scope,
       outcome, endReason, ...(chapter ? { difficulty: spec.difficulty, parentSession: spec.parentSession,
         ...(spec.difficulty === 'seraph' ? { seraphVersion: SERAPH_VERSION } : {}) } : {}) } : {}),
     ...(battleResult && chapter!.bossLogStart >= 0 ? bossFields(events.slice(chapter!.bossLogStart), battleResult) : {}),
@@ -597,11 +619,17 @@ function end() {
     pendingMemorySessions.add(session);
   }
   if (spec.mode === 'patch' && spec.study) spec.study = { ...spec.study, trainingSession: session, words: round.wordsDone };
-  offeredLesson = battleResult && chapter!.bossLogStart >= 0 ? { before: meta, place: spec.place, initialKanaPerSec: chapter!.initialBossSpeed,
+  offeredLesson = !spec.combatTrial && battleResult && chapter!.bossLogStart >= 0 ? { before: meta, place: spec.place, initialKanaPerSec: chapter!.initialBossSpeed,
     sourceBossOnly: spec.study?.lesson.sourceBossOnly ?? !!spec.bossOnly, events: events.slice(chapter!.bossLogStart) } : null;
   const label = battleResult ? outcome === 'cleared' ? chapter!.definition.clearLabel : outcome === 'lost' ? '結界が砕けた · 敗北' : endReason === 'word-limit' ? '祈りの上限に到達 · 途中記録' : '章の途中記録' : fullJourney ? '五つの封印を突破' : spec.mode === 'journey' ? '道中の途中記録' : spec.mode === 'passage' ? round.session.complete ? '長文を完了' : '長文の途中記録' : spec.mode === 'patch' ? spec.study ? 'セラの修行の記録' : '弱点練習の記録' : '60秒の記録';
   const feedback = result.slowBigram ? `「${result.slowBigram.pair}」の遷移が中央値より${Math.round(result.slowBigram.excessMs)}ms長め（${result.slowBigram.count}回）。` : result.missedKey ? `「${result.missedKey.key}」で${result.missedKey.count}回打ち直しました。` : '言葉をひとつずつ、正確に届けよう。';
   main.innerHTML = `<section class="av-page av-result"><p class="av-eyebrow">${esc(spec.dict.name)} ／ ${CHARACTERS[spec.character].name}${battleResult ? ` ／ ${difficultyText(spec.difficulty!)}${spec.bossOnly ? ' · ボス再挑戦' : ''}` : ''}</p><h1 tabindex="-1">${label}</h1><p>${battleResult && fullJourney ? esc(chapter!.definition.victory) : fullJourney ? PLACES[spec.place].outro ?? CHARACTERS[spec.character].clear : 'おつかれさま。自分のペースで、また続けよう。'}</p>${fullJourney ? `<p class="av-earned">${starsText(stars)} · ${spec.difficulty === "seraph" ? "熾天の成果" : `${PLACES[spec.place].sub}への道をひらいた`}</p>` : ''}${spec.daily ? `<p class="av-earned" id="daily-result-date">今日の祈り · ${spec.daily.date} · ${esc(spec.daily.zone)}</p><p id="daily-result-record" role="status">今日の記録を保存中…</p><p class="av-footnote">同じ日・天使・難度の章を通した結果で比べます。ボスだけの再挑戦とセラの修行は今日の記録に含めません。</p>` : ""}<div class="av-result-grid"><div><span>スコア</span><strong id="result-score">${scoring.score.toLocaleString('ja-JP')}</strong><small>正確な祈りの積み重ね</small></div>${spec.mode === 'journey' ? `<div><span>ランク</span><strong id="result-rank">${rank ?? '—'}</strong><small>${fullJourney ? `ミスなし ${scoring.cleanWords} / ${round.wordsDone} 語` : '途中記録 · ランクなし'}</small></div>` : ''}<div><span>所要時間</span><strong id="result-time">${timeText(elapsedMs)}</strong><small>入力中の時間</small></div><div><span>速度</span><strong>${result.kanaPerSec.toFixed(2)}<small>字／秒</small></strong><small>${Math.round(result.keysPerMin)} 打鍵／分（参考）</small></div><div><span>正確率</span><strong>${(result.accuracy * 100).toFixed(1)}<small>%</small></strong><small>ミス ${result.misses}</small></div><div><span>最大コンボ</span><strong>${result.maxChain}</strong><small>完了 ${round.wordsDone} 語</small></div></div>${battleResult ? `<div class="av-battle-results"><span>弾き返し <b id="result-parries">${battleResult.stats.parries} / ${battleResult.stats.resolved}</b></span><span>大技 <b id="result-specials">${battleResult.stats.specials}</b></span><span>祈り直し <b id="result-resets">${battleResult.stats.resets}</b></span><span>ひび <b>${battleResult.stats.cracks}回</b></span></div>` : ''}${battleResult && spec.study?.trainingSession ? renderBossComparison(spec.study.lesson.before, meta) : ""}${spec.mode === "patch" && spec.study ? `<p class="av-help">セラ「${round.wordsDone ? "唱えた祈りを、元の相手へ届けてみましょう。" : "今回は一語も完了していません。戻ってからの記録は参考として見てください。"}」</p>` : ""}<p class="av-help">${esc(feedback)}</p><p class="av-footnote">${mode === 'benchmark' ? result.kanaPerSec > best ? '自己ベスト更新' : `自己ベスト ${best.toFixed(2)} 字／秒` : '練習記録です。60秒計測の自己ベストの対象外。'}${round.interrupted ? ' · 中断あり' : ''}</p>${personalBest ? `<p class="av-earned" id="personal-best">${personalBest}</p>` : ''}${progressStatus ? `<p id="progress-save-state" class="av-save" role="status">${progressStatus}</p>` : ''}${earnedBits ? '<p id="memory-earned" class="av-earned" role="status">旅の記憶を確認中…</p>' : ""}<p id="session-save-state" class="av-save" role="status">今回の記録を保存中…</p><div id="recent-sessions"></div><div class="av-page-footer">${spec.mode === "patch" && spec.study ? action("元のボスに戻る", "study-return", "primary") : battleResult && fullJourney ? action('後日談へ', 'postlude', 'primary') : battleResult && outcome === 'lost' ? action('ボスから再挑戦', 'boss-retry', 'primary') : fullJourney && spec.place < PLACES.length - 1 ? action('次の場所へ', 'next-place', 'primary') : action('旅の地図', 'map', 'primary')}${action(spec.daily ? '同じ日の祈りをもう一度' : 'もう一度', 'retry')}${fullJourney && spec.place < PLACES.length - 1 ? action('旅の地図', 'map') : ''}${offeredLesson ? action("セラの修行場へ", "study") : ""}${action('この辞書の記録', 'run-records')}${action("旅の記憶を見る", "memories")}</div></section>`;
+  if (spec.combatTrial) {
+    main.querySelector('h1')!.textContent = fullJourney ? '守護機との稽古を完了' : '横視点バトルの途中記録';
+    main.querySelector('h1 + p')!.textContent = '1文字ずつの斬撃と迎撃。入力した分の成果を、この練習の記録に残しました。';
+    main.querySelector('.av-earned')?.remove();
+    main.querySelector('.av-page-footer')!.innerHTML = `${action('もう一度バトル', 'retry', 'primary')}${action('練習へ', 'training')}${action('この練習の記録', 'run-records')}`;
+  }
   main.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true });
   main.querySelectorAll<HTMLButtonElement>('button').forEach(b => { b.disabled = true; });
   setTimeout(() => {
@@ -692,6 +720,7 @@ function perform(name: string) {
   if (finale || (view === 'result' && performance.now() < resultReadyAt)) return;
   if (name === 'map') { round = null; changeView('journey'); }
   else if (name === 'memories') changeView('memories');
+  else if (name === 'training') changeView('training');
   else if (name === 'records') { recordDict = DICTIONARIES[dictIndex]; changeView('records'); }
   else if (name === 'run-records' && run) { recordDict = run.dict; changeView('records'); }
   else if (name === 'start-journey') start({ dict: journeyDictionary(place), mode: 'journey', place, character });
@@ -701,7 +730,11 @@ function perform(name: string) {
   }
   else if (name === 'start-training') { const dict = DICTIONARIES[dictIndex]; start({ dict, mode: dict.kind === 'passage' ? 'passage' : 'benchmark', place, character }); }
   else if (name === 'start-passage') start({ dict: DICTIONARIES.find(d => d.id === 'jp-knowledge-passages')!, mode: 'passage', place, character });
-  else if (name === 'retry' && run) start({ ...run, bossOnly: false, parentSession: undefined, initialKanaPerSec: undefined, seed: run.daily?.seed, study: run.mode === 'patch' && run.study ? { lesson: run.study.lesson } : undefined });
+  else if (name === 'combat-practice' || name === 'combat-long') {
+    const dict = combatDictionaries[name === 'combat-long' ? 1 : 0];
+    start({ dict, mode: 'journey', place: 0, character, difficulty: 'standard', bossOnly: true, combatTrial: true });
+  }
+  else if (name === 'retry' && run) start({ ...run, bossOnly: !!run.combatTrial, parentSession: undefined, initialKanaPerSec: undefined, seed: run.daily?.seed, study: run.mode === 'patch' && run.study ? { lesson: run.study.lesson } : undefined });
   else if (name === 'boss-retry' && run && chapter?.battle.snapshot().outcome === 'lost') start({ ...run, bossOnly: true, parentSession: lastSession, initialKanaPerSec: chapter.battle.snapshot().kanaPerSec, seed: undefined, study: undefined, daily: undefined });
   else if (name === 'study' && view === 'result' && offeredLesson) {
     lesson = { ...offeredLesson, focus: trainingFocus(offeredLesson.events, bossPracticeDictionary(offeredLesson.place), prefs) }; changeView('lesson');
@@ -753,7 +786,7 @@ root.addEventListener('change', event => {
   const target = event.target as HTMLSelectElement;
   if (target.id === 'journey-difficulty' && isDifficulty(target.value)) { difficulty = target.value; settings.set('angel.difficulty', difficulty); updateJourneyDifficulty(); syncDailyCard(true); }
   else if (target.id === 'training-dict' && isDictionaryIndex(DICTIONARIES.length)(Number(target.value))) { dictIndex = Number(target.value); settings.set('dict', dictIndex); }
-  else if (target.id === 'record-dict') { const d = [...DICTIONARIES, ...PLACES.map((_, i) => getChapter(i) ? chapterDictionary(i) : journeyDictionary(i))].find(d => d.id === target.value); if (d) { recordDict = d; report = undefined; $('report').textContent = '記録を読み込み中…'; void showRecords(); } }
+  else if (target.id === 'record-dict') { const d = [...DICTIONARIES, ...combatDictionaries, ...PLACES.map((_, i) => getChapter(i) ? chapterDictionary(i) : journeyDictionary(i))].find(d => d.id === target.value); if (d) { recordDict = d; report = undefined; $('report').textContent = '記録を読み込み中…'; void showRecords(); } }
 });
 $('music-volume').addEventListener('input', event => { music.setVolume(Number((event.target as HTMLInputElement).value)); settings.set('music.volume', music.volume); renderSound(); });
 $('sound-volume').addEventListener('input', event => { audio.setVolume(Number((event.target as HTMLInputElement).value)); settings.set('volume', audio.volume); audio.ensure(); renderSound(); });
@@ -809,12 +842,15 @@ window.addEventListener('keydown', event => {
     if (round.finished) { end(); return; }
   }
   const previousWord = round.word, previousSession = round.session, previousKana = round.session.kanaDone, previousChain = round.chain;
+  const beforeInput = chapter?.phase === 'boss' ? inputView() : null;
+  const keyAction = chapter?.battle.snapshot().attack ? 'defend' : 'attack';
   const wordClean = !scoring.wordMissed;
   const outcome = round.input(event.key, event.timeStamp, event.code);
   if (outcome.late) { end(); return; }
   const committedKana = outcome.wordDone ? normalizeReading(previousWord.reading).length - previousKana
     : round.session.kanaDone - previousKana;
   scoring = scoreInput(scoring, committedKana, outcome.accepted, outcome.wordDone);
+  if (outcome.accepted && chapter?.battle instanceof Duel && beforeInput) chapter.battle.acceptedKey(round.elapsedMs(event.timeStamp), beforeInput, inputView());
   if (chapter && outcome.wordDone) {
     const gameMs = round.elapsedMs(event.timeStamp), kana = normalizeReading(previousWord.reading).length;
     if (chapter.phase === 'route') {
@@ -825,9 +861,11 @@ window.addEventListener('keydown', event => {
   if (outcome.accepted) {
     speed.accepted(event.timeStamp, !!round.log.at(-1)?.afterPause);
     audio.key(round.stage, outcome.critical, comboTier(round.chain));
-    combat?.hit(outcome.wordDone ? 'word' : crossedMilestone(previousWord, previousKana, round.session.kanaDone) ? 'milestone' : 'key');
+    const hit = outcome.wordDone ? 'word' : crossedMilestone(previousWord, previousKana, round.session.kanaDone) ? 'milestone' : 'key';
+    if (combat instanceof SideCombatScene) combat.acceptedKey(keyAction, round.elapsedMs(event.timeStamp), hit);
+    else combat?.hit(hit);
     if (outcome.wordDone) { audio.word(round.stage); breakthrough(); }
-    $('input-status').textContent = outcome.wordDone ? chapter?.phase === 'boss' ? '祈りが命中' : '封印を突破' : 'ローマ字を打つ';
+    $('input-status').textContent = outcome.wordDone ? run?.combatTrial ? '文を完成 · 次の言葉へ' : chapter?.phase === 'boss' ? '祈りが命中' : '封印を突破' : 'ローマ字を打つ';
   } else {
     audio.miss();
     if (previousChain >= 10) { comboBrokenUntil = event.timeStamp + 800; audio.comboBreak(); }
