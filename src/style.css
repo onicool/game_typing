@@ -199,3 +199,7 @@
 #angel-ui-studio .av-memory summary::marker{color:#ecd29b;}
 #angel-ui-studio .av-memory-text{line-height:1.9;}
 @media(max-width:760px){#angel-ui-studio .av-memory-grid{grid-template-columns:minmax(0,1fr);}}
+
+#angel-ui-studio .av-word-source{font-size:12px;line-height:1.65;color:var(--av-muted);margin:12px 0 0;}
+#angel-ui-studio .av-word-source a{color:var(--av-gold);text-decoration:underline;}
+#angel-ui-studio #music-status{flex-basis:100%;margin:0;}

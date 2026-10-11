@@ -1,6 +1,7 @@
 import { JP_WORDS } from './data_jp';
 import { EN_WORDS } from './data_en';
 import { PASSAGES } from './passages';
+import { KNOWLEDGE_WORDS, KNOWLEDGE_PASSAGES } from './knowledge';
 export interface Word {
   display: string;
   /** Stable dictionary/display identity when supplied by a word source. */
@@ -8,6 +9,7 @@ export interface Word {
   /** Kana reading for Japanese, literal text for English. */
   reading: string;
   segments?: { display: string; reading: string }[];
+  source?: { title: string; url: string; category: string; person?: string };
 }
 
 export interface Dictionary {
@@ -156,6 +158,8 @@ export const DICTIONARIES: Dictionary[] = [
   { id: 'jp-core', name: '日本語', label: 'JP / ROMAJI', words: uniqueWords([...JAPANESE, ...strip(JP_WORDS)], 'jp-core') },
   { id: 'en-core', name: 'English', label: 'EN / DIRECT', words: uniqueWords([...ENGLISH, ...strip(EN_WORDS)], 'en-core') },
   { id: 'jp-passages', name: '長文練習', label: 'JP / LONG PRACTICE', kind: 'passage', words: uniqueWords(PASSAGES, 'jp-passages') },
+  { id: 'jp-knowledge', name: '教養の短文・先人の要旨', label: '学び / ROMAJI', words: uniqueWords(KNOWLEDGE_WORDS, 'jp-knowledge') },
+  { id: 'jp-knowledge-passages', name: '教養の長文', label: '学び / LONG PRACTICE', kind: 'passage', words: uniqueWords(KNOWLEDGE_PASSAGES, 'jp-knowledge-passages') },
 ];
 
 /** Stable across seeds, sessions and spelling preferences. */

@@ -25,16 +25,16 @@ function install(ctx = device()) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('optional audio never blocks gameplay', () => {
-  it('raises the key pitch one semitone per combo tier independently of rhythm stage', () => {
+  it('keeps the same brief key sound regardless of speed, combo and previous words', () => {
     const { ctx } = install(); const audio = new Audio(); audio.ensure();
-    audio.key(0, false);
-    const base = ctx.createOscillator.mock.results[0].value.frequency.value;
-    audio.reset(); audio.key(3, false, 2);
-    expect(ctx.createOscillator.mock.results[2].value.frequency.value / base).toBeCloseTo(2 ** (2 / 12));
-    audio.comboBreak();
-    expect(ctx.createOscillator.mock.results[4].value.frequency.exponentialRampToValueAtTime).toHaveBeenCalledWith(220, 1.12);
-    audio.enabled = false; audio.comboBreak();
-    expect(ctx.createOscillator).toHaveBeenCalledTimes(5);
+    audio.key(0, false); audio.word(0); audio.key(3, true, 3);
+    const tones = ctx.createOscillator.mock.results.map(result => result.value);
+    expect(tones[0].frequency.value).toBe(880);
+    expect(tones[2].frequency.value).toBe(880);
+    expect(tones[0].stop).toHaveBeenCalledWith(1.085);
+    expect(tones[2].stop).toHaveBeenCalledWith(1.085);
+    audio.enabled = false; audio.key(3, true, 3);
+    expect(ctx.createOscillator).toHaveBeenCalledTimes(3);
   });
   it('contains a combat-cue device failure without retrying on each frame', () => {
     const { ctx, constructor } = install();
@@ -69,7 +69,7 @@ describe('optional audio never blocks gameplay', () => {
     audio.ensure(); expect(repaired.constructor).not.toHaveBeenCalled();
     audio.enabled = false; audio.enabled = true; audio.ensure(); audio.key(0, false);
     expect(audio.unavailable).toBe(false);
-    expect(repaired.ctx.createOscillator).toHaveBeenCalledTimes(2);
+    expect(repaired.ctx.createOscillator).toHaveBeenCalledTimes(1);
   });
 
   it('closes a partial graph and keeps volume and mute controls usable', () => {
@@ -80,7 +80,7 @@ describe('optional audio never blocks gameplay', () => {
     expect(() => { audio.setVolume(0.4); audio.enabled = false; }).not.toThrow();
     audio.enabled = true; audio.ensure(); audio.key(0, false);
     expect(audio.unavailable).toBe(false);
-    expect(ctx.createOscillator).toHaveBeenCalledTimes(2);
+    expect(ctx.createOscillator).toHaveBeenCalledTimes(1);
   });
 
   it.each(['key', 'miss', 'word', 'breach'] as const)('contains a %s synthesis fault without repeated allocations', effect => {
@@ -119,7 +119,7 @@ describe('optional audio never blocks gameplay', () => {
     expect(ctx.resume).toHaveBeenCalledTimes(1);
     expect(ctx.createOscillator).not.toHaveBeenCalled();
     ctx.state = 'running'; resolve(); await Promise.resolve(); audio.key(0, false);
-    expect(ctx.createOscillator).toHaveBeenCalledTimes(2);
+    expect(ctx.createOscillator).toHaveBeenCalledTimes(1);
   });
 
   it('handles resume rejection and can recreate a closed context without an obsolete rejection disabling it', async () => {
@@ -130,7 +130,7 @@ describe('optional audio never blocks gameplay', () => {
     first.ctx.state = 'closed'; const next = install(); audio.ensure();
     reject(new Error('old context closed')); await Promise.resolve(); await Promise.resolve();
     expect(audio.unavailable).toBe(false);
-    audio.key(0, false); expect(next.ctx.createOscillator).toHaveBeenCalledTimes(2);
+    audio.key(0, false); expect(next.ctx.createOscillator).toHaveBeenCalledTimes(1);
     next.ctx.state = 'suspended'; next.ctx.resume.mockRejectedValue(new Error('resume denied'));
     audio.ensure(); await Promise.resolve(); await Promise.resolve();
     expect(audio.unavailable).toBe(true);

@@ -1,32 +1,14 @@
-/**
- * Procedural synth audio. Every sound starts inside the keydown handler with no
- * scheduling delay: the music follows the player, never the other way round.
- *
- * - each accepted key: a short tone from the current chord (arpeggiator style,
- *   so any typing speed stays consonant)
- * - each completed word: the progression advances one chord, with layers that
- *   stack up with the overclock stage
- */
+/** Short operation and battle effects only. Ordinary BGM lives in music.ts. */
 
-const PROGRESSIONS: number[][][] = [
-  [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], // Am–F–C–G
-  [[57, 60, 64], [55, 59, 62], [53, 57, 60], [52, 56, 59]], // Am–G–F–E
-  [[50, 53, 57], [57, 60, 64], [53, 57, 60], [55, 59, 62]], // Dm–Am–F–G
-];
 const DEFAULT_VOLUME = 0.7;
 const MASTER_GAIN = 0.55 / DEFAULT_VOLUME;
-const ARP = [0, 1, 2, 3, 4, 5, 4, 3, 2, 1]; // up-down over two octaves of chord tones
 
-const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
 export class Audio {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
   private delaySend!: GainNode;
   private noise!: AudioBuffer;
-  private chordIdx = 0;
-  private arpIdx = 0;
-  private progressionIdx = 0;
   private _enabled = true;
   private _volume = DEFAULT_VOLUME;
   private failed = false;
@@ -147,69 +129,12 @@ export class Audio {
     try { effect(); } catch { this.fail(ctx); }
   }
 
-  reset() {
-    this.progressionIdx = 0;
-    this.chordIdx = 0;
-    this.arpIdx = 0;
-  }
-
-  /** Accepted keystroke. stage = overclock 0..3 */
-  key(stage: number, critical: boolean, comboTier = 0) {
-    this.play(() => this.synthKey(stage, critical, comboTier));
-  }
-
-  private synthKey(stage: number, critical: boolean, comboTier: number) {
-    const ctx = this.live();
-    if (!ctx) return;
-    const t = ctx.currentTime;
-    const chord = PROGRESSIONS[this.progressionIdx][this.chordIdx];
-    const step = ARP[this.arpIdx % ARP.length];
-    this.arpIdx++;
-    const midi = chord[step % 3] + 12 * Math.floor(step / 3) + 12 + Math.max(0, Math.min(3, comboTier));
-
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 1800 + stage * 1400;
-    filter.Q.value = 2;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.16, t + 0.003);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
-    filter.connect(g);
-    g.connect(this.master);
-    g.connect(this.delaySend);
-
-    const o1 = ctx.createOscillator();
-    o1.type = 'triangle';
-    o1.frequency.value = mtof(midi);
-    const o2 = ctx.createOscillator();
-    o2.type = 'square';
-    o2.frequency.value = mtof(midi) * 1.003;
-    const g2 = ctx.createGain();
-    g2.gain.value = 0.25;
-    o1.connect(filter);
-    o2.connect(g2).connect(filter);
-    o1.start(t);
-    o2.start(t);
-    o1.stop(t + 0.2);
-    o2.stop(t + 0.2);
-
-    // tiny transient click so fast typing still feels percussive
-    this.noiseBurst(t, 0.01 + Math.random() * 0.003, 5400 + Math.random() * 1200, 0.022 + Math.random() * 0.008, 'highpass');
-
-    if (critical) {
-      const s = ctx.createOscillator();
-      s.type = 'sine';
-      s.frequency.value = mtof(midi + 24);
-      const sg = ctx.createGain();
-      sg.gain.setValueAtTime(0.08, t);
-      sg.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-      s.connect(sg);
-      sg.connect(this.master);
-      sg.connect(this.delaySend);
-      s.start(t);
-      s.stop(t + 0.3);
-    }
+  /** A fixed, brief key confirmation; speed and combo do not compose music. */
+  key(_stage: number, _critical: boolean, _comboTier = 0) {
+    this.play(() => {
+      const ctx = this.live();
+      if (ctx) this.voice(ctx.currentTime, 'sine', 880, 0.035, 0.035, 3000);
+    });
   }
 
   miss() {
@@ -228,7 +153,7 @@ export class Audio {
     });
   }
 
-  /** Theatrical enemy cues; optional and independent of typing/chord progress. */
+  /** Theatrical enemy cues; optional and independent of BGM playback. */
   combatCue(kind: 'windup' | 'guard' | 'impact') {
     this.play(() => {
       const ctx = this.live();
@@ -268,30 +193,12 @@ export class Audio {
     o.stop(t + 0.1);
   }
 
-  /** Word completed: advance the progression and play the accompaniment layers. */
-  word(stage: number) {
-    this.play(() => this.synthWord(stage));
-  }
-
-  private synthWord(stage: number) {
-    const ctx = this.live();
-    if (!ctx) return;
-    const t = ctx.currentTime;
-    this.chordIdx = (this.chordIdx + 1) % PROGRESSIONS[this.progressionIdx].length;
-    this.arpIdx = 0;
-    const chord = PROGRESSIONS[this.progressionIdx][this.chordIdx];
-
-    // shatter
-    this.noiseBurst(t, 0.18, 3200, 0.16, 'bandpass', 900);
-
-    // bass (always)
-    this.voice(t, 'sawtooth', mtof(chord[0] - 24), 0.5, 0.2, 500 + stage * 300);
-    // pad stab from stage 1
-    if (stage >= 1) for (const n of chord) this.voice(t, 'sawtooth', mtof(n), 0.35, 0.05, 1400 + stage * 500);
-    // sub thump from stage 2
-    if (stage >= 2) this.thump(t, 0.18);
-    // sparkle from stage 3
-    if (stage >= 3) for (let i = 0; i < 3; i++) this.voice(t + i * 0.06, 'sine', mtof(chord[i] + 24), 0.18, 0.05, 8000, true);
+  /** Brief word-completion cue, independent of music and typing speed. */
+  word(_stage: number) {
+    this.play(() => {
+      const ctx = this.live();
+      if (ctx) this.voice(ctx.currentTime, 'sine', 660, 0.08, 0.045, 3000);
+    });
   }
 
   /** Whole firewall destroyed. */
@@ -300,10 +207,6 @@ export class Audio {
   }
 
   private synthBreach() {
-    // Advance even while muted so the music still follows gameplay.
-    this.progressionIdx = (this.progressionIdx + 1) % PROGRESSIONS.length;
-    this.chordIdx = 0;
-    this.arpIdx = 0;
     const ctx = this.live();
     if (!ctx) return;
     const t = ctx.currentTime;

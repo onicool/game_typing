@@ -4,6 +4,7 @@ import { Round, type RoundOptions } from './game/round';
 import { DICTIONARIES, type Dictionary, type Word } from './content/words';
 import { TypingSession, normalizeReading } from './engine/romaji';
 import { Audio } from './fx/audio';
+import { Music, MUSIC_TRACKS } from './fx/music';
 import { DialogFocus } from './ui/dialog';
 import { renderReport } from './ui/report';
 import { loadEvents, loadSessions, saveSession, type SessionMeta } from './stats/store';
@@ -41,9 +42,12 @@ const settings = createSettingsStore(issue => {
 let character = settings.get('angel.character', 'elna', isCharacter);
 let place = settings.get('angel.place', 0, isPlaceIndex);
 let difficulty = settings.get('angel.difficulty', 'standard', isDifficulty);
-let dictIndex = settings.get('dict', 0, isDictionaryIndex(DICTIONARIES.length));
+let dictIndex = settings.get('dict', DICTIONARIES.findIndex(d => d.id === 'jp-knowledge'), isDictionaryIndex(DICTIONARIES.length));
 const prefs = settings.get('prefs', {}, isSpellingPreferences);
 const audio = new Audio(); audio.enabled = settings.get('sound', true, isBoolean); audio.setVolume(settings.get('volume', 1, isVolume));
+const music = new Music();
+music.setEnabled(settings.get('music.enabled', true, isBoolean));
+music.setVolume(settings.get('music.volume', 0.35, isVolume));
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const compactChapter = matchMedia('(max-width: 620px), (max-height: 650px)');
 let motion = settings.get('effects.motion', reducedMotion.matches ? 0 : 1, isEffectLevel);
@@ -120,8 +124,14 @@ function renderSound() {
   $('setting-sound').textContent = audio.enabled ? audio.unavailable ? '利用不可（オフ→オンで再試行）' : 'オン' : 'オフ';
   $('sound-toggle').setAttribute('aria-pressed', String(audio.enabled));
   $<HTMLInputElement>('sound-volume').value = String(audio.volume);
+  $('setting-music').textContent = music.enabled ? 'オン' : 'オフ';
+  $('music-toggle').setAttribute('aria-pressed', String(music.enabled));
+  $<HTMLInputElement>('music-volume').value = String(music.volume);
+  const label = { idle: '開始するとBGMが流れます', muted: 'BGMはミュート中', paused: 'BGMは一時停止中', playing: 'BGM再生中', unavailable: 'BGMを再生できません。音源を確認し、オフ→オンで再試行してください' }[music.status];
+  $('music-status').textContent = `${label}${music.title ? ` · ${music.title}` : ''}`;
 }
 audio.onAvailabilityChange = renderSound;
+music.onChange = renderSound;
 function showModal(id: typeof modal) {
   const origin = document.activeElement;
   modal = id;
@@ -136,6 +146,7 @@ function updateNav() {
   $<HTMLButtonElement>('open-settings').disabled = finale !== null || conversation !== null || (view === 'result' && performance.now() < resultReadyAt);
 }
 function changeView(next: typeof view) {
+  music.stop();
   if (next !== 'lesson') lesson = null;
   $('chapter-dialog')?.remove();
   read?.abort(); read = undefined; request++; report = undefined;
@@ -146,14 +157,14 @@ function changeView(next: typeof view) {
 }
 function render() {
   if (view === 'characters') {
-    main.innerHTML = `<section class="av-page av-character-page"><div class="av-heading"><p class="av-eyebrow">空と祈り</p><h1 tabindex="-1">誰と旅に出る？</h1><p>言葉を唱えて、下界への道をひらこう。</p></div><div class="av-choice-grid">${Object.entries(CHARACTERS).map(([key, p]) => `<button type="button" class="av-choice" data-person="${key}" aria-pressed="${character === key}">${picture(`player-${key}`, p.name)}<div class="av-choice-copy"><strong>${p.name}</strong><p>${p.role}<br>「${p.quote}」</p></div></button>`).join('')}</div><div class="av-page-footer"><span>${CHARACTERS[character].name}を選択中</span>${action('この天使で旅に出る', 'map', 'primary')}</div></section>`;
+    main.innerHTML = `<section class="av-page av-character-page"><div class="av-heading"><p class="av-eyebrow">空と祈り</p><h1 tabindex="-1">誰と旅に出る？</h1><p>言葉を唱えて、下界への道をひらこう。</p></div><div class="av-choice-grid">${Object.entries(CHARACTERS).map(([key, p]) => `<button type="button" class="av-choice" data-person="${key}" aria-pressed="${character === key}">${picture(`player-${key}`, p.name)}<div class="av-choice-copy"><strong>${p.name}</strong><p>${p.role}<br>「${p.quote}」</p></div></button>`).join('')}</div><div class="av-page-footer"><span>${CHARACTERS[character].name}を選択中</span>${action('この天使で旅に出る', 'map', 'primary')}${action('教養の短文を打つ', 'knowledge')}</div></section>`;
   } else if (view === 'journey') {
     refreshProgress();
     if (!placeOpen(place)) place = 0;
     const p = PLACES[place];
     main.innerHTML = `<section class="av-page"><div class="av-heading"><p class="av-eyebrow">SEVEN PLACES</p><h1 tabindex="-1">旅の地図</h1><p>7つの章で、出会う相手に言葉を届けます。前の章をクリアして、次の場所へ進みましょう。</p>${action("旅の記憶を見る", "memories")}</div>${dailyCard()}<div class="av-map">${PLACES.map((p, i) => `<button type="button" class="av-choice" data-place="${i}" aria-pressed="${i === place}" ${placeOpen(i) ? '' : 'disabled aria-describedby="chapter-unlock-note"'}>${picture(p.art, p.name)}<div class="av-choice-copy"><small>STAGE ${String(i + 1).padStart(2, '0')}</small><strong>${p.name}</strong><span>${p.sub}</span><span class="av-place-record">${esc(placeRecordText(i))}</span></div></button>`).join('')}</div><div class="av-page-footer"><span>${CHARACTERS[character].name} · ${p.name}を選択中</span><label class="av-difficulty">章の難度 <select id="journey-difficulty"><option value="standard" ${difficulty === 'standard' ? 'selected' : ''}>標準</option><option value="challenge" ${difficulty === 'challenge' ? 'selected' : ''}>挑戦</option><option value="seraph" ${difficulty === 'seraph' ? 'selected' : ''}>熾天</option></select></label>${action('この場所へ', 'start-journey', 'primary')}</div><p id="difficulty-note" class="av-footnote" role="status"></p><p id="chapter-unlock-note" class="av-footnote">前の章の現在版をクリアすると、第2〜7章の鍵がひらきます。標準で一度クリアしたら挑戦がおすすめ。</p></section>`;
   } else if (view === 'training') {
-    main.innerHTML = `<section class="av-page"><div class="av-heading"><p class="av-eyebrow">PRACTICE</p><h1 tabindex="-1">言葉を磨く</h1><p>旅のあいだに、打ちやすい指づかいを見つけよう。</p></div><div class="av-training-grid"><section class="av-card"><h2>60秒の計測</h2><p>日本語・英語の正確さと速度を記録。最初のキーで時計が動きます。</p><label>辞書 <select id="training-dict">${DICTIONARIES.map((d, i) => `<option value="${i}" ${i === dictIndex ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>${action('選んだ辞書で練習する', 'start-training', 'primary')}<p class="av-footnote">中断した計測と長文・弱点練習は自己ベストの対象外。</p></section><section class="av-card"><h2>ゆっくり長文</h2><p>読みとローマ字が入力位置を追いかけます。時間制限なし。途中終了も記録できます。</p>${action('長文を練習する', 'start-passage')}<hr><h2>自分の弱点を知る</h2><p>記録から遅い指の遷移やミスを確認し、弱点に合わせた練習へ。</p>${action('練習記録を見る', 'records')}</section></div><p class="av-help">shi / si・chi / tiなどの別綴りに対応。IMEはオフ。ミスはそのまま打ち直し、Backspaceは不要です。</p></section>`;
+    main.innerHTML = `<section class="av-page"><div class="av-heading"><p class="av-eyebrow">PRACTICE</p><h1 tabindex="-1">言葉を磨く</h1><p>雑学と先人の考え方を、打ちながら少しずつ学ぼう。</p></div><div class="av-training-grid"><section class="av-card"><h2>60秒の計測</h2><p>教養の短文と、従来の日本語・英語辞書を選べます。最初のキーで時計が動きます。</p><label>辞書 <select id="training-dict">${DICTIONARIES.map((d, i) => `<option value="${i}" ${i === dictIndex ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>${action('教養の短文を打つ', 'knowledge', 'primary')}${action('選んだ辞書で練習する', 'start-training')}<p class="av-footnote">中断した計測と長文・弱点練習は自己ベストの対象外。</p></section><section class="av-card"><h2>ゆっくり長文</h2><p>読みとローマ字が入力位置を追いかけます。時間制限なし。途中終了も記録できます。</p>${action('長文を練習する', 'start-passage')}<hr><h2>自分の弱点を知る</h2><p>記録から遅い指の遷移やミスを確認し、弱点に合わせた練習へ。</p>${action('練習記録を見る', 'records')}</section></div><p class="av-help">shi / si・chi / tiなどの別綴りに対応。IMEはオフ。ミスはそのまま打ち直し、Backspaceは不要です。</p></section>`;
   } else if (view === 'lesson' && lesson) {
     const before = lesson.before, boss = getChapter(lesson.place)!;
     main.innerHTML = `<section class="av-page av-result" id="sera-lesson"><p class="av-eyebrow">セラの修行場</p><h1 tabindex="-1">次の祈りを、ここで整えましょう</h1><p class="av-help">セラ「${lesson.focus ? `『${esc(lesson.focus.label)}』の指づかいを確かめましょう。` : '今回は、同じ相手への祈りをゆっくり繰り返しましょう。'}」</p><section class="av-card"><h2>${esc(boss.bossName)}へ戻る修行</h2><p>${CHARACTERS[before.character!].name} · ${difficultyText(before.difficulty!)} · 戻ったらボス戦から始めます。</p><p>最初のキーから60秒。反撃はありません。Escから途中で終えて戻ることもできます。</p><p class="av-footnote">ボスの結果に合わせた祈りを練習し、戻ったあとはボス戦の正確率・弾き返し・ひびを比べます。このページを閉じると直接戻る道は終了します。</p></section><div class="av-page-footer">${action('修行を始める', 'study-start', 'primary')}${action('旅の地図', 'map')}</div></section>`;
@@ -261,7 +272,7 @@ function start(spec: Run) {
   }
   round = new Round(spec.dict, prefs, opts); scoring = emptyScore(); speed.reset(); panelWord = undefined;
   refreshProgress();
-  audio.reset(); audio.ensure(); stopAnimations(); app.style.setProperty('--av-depth', '1');
+  music.start(MUSIC_TRACKS[spec.place]); audio.ensure(); stopAnimations(); app.style.setProperty('--av-depth', '1');
   view = 'battle'; updateNav(); showModal(null);
   const p = PLACES[spec.place], person = CHARACTERS[spec.character];
   main.innerHTML = `<section class="av-battle" aria-label="${p.name} タイピング"><div class="av-landscape" style="background-image:url('${art(p.art)}')" aria-hidden="true"></div><div class="av-hud"><div class="av-pilot"><div class="av-eyebrow">旅する天使</div><div class="av-pilot-name">${person.name}</div><div class="av-route-label">${spec.mode === 'journey' ? '道中の祈り' : esc(spec.dict.name)}</div></div><div class="av-stage"><div class="av-eyebrow">STAGE ${String(spec.place + 1).padStart(2, '0')} ／ ${p.sub}</div><div class="av-stage-name">${p.name}</div><div class="av-stage-progress" aria-label="旅の第${spec.place + 1}章">${PLACES.map((_, i) => `<i class="${currentRecord(PLACES[i].key, spec.difficulty).cleared ? 'active' : ''}"></i>`).join('')}</div></div><div class="av-score-box"><div class="av-eyebrow">SCORE</div><div class="av-score" id="score">0</div><div class="av-combo"><strong id="combo">0</strong> COMBO</div><div id="combo-status" class="av-combo-status" role="status"></div></div></div><div class="av-arena"><section class="av-quest"><div class="av-quest-top"><span>${spec.mode === 'journey' ? 'QUEST' : 'PRACTICE'}</span><span id="quest-count">0 / 5</span></div><div class="av-quest-title">${spec.mode === 'journey' ? '五つの封印を<br>解き放つ' : spec.mode === 'passage' ? '言葉を最後まで<br>届けよう' : spec.mode === 'patch' ? `指づかいを磨く<br>${esc(spec.focus ?? '')}` : '自分の速さを<br>見つけよう'}</div><div class="av-quest-track" id="quest-track" role="progressbar" aria-label="練習の進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="quest-progress"></i></div><div class="av-quest-note" id="quest-note">${spec.mode === 'journey' ? `目的：${p.sub}への道をひらく` : spec.mode === 'passage' ? '時間制限なし' : '最初のキーから60秒'}</div></section><div class="av-obstacle-area" aria-hidden="true"><div class="av-obstacle" id="seal"><span id="seal-label">${p.landmark}</span></div><div class="av-spell" id="spell"></div><div class="av-obstacle-note" id="seal-note">一語の祈りで、道をひらく</div></div><aside class="av-speaker" aria-label="${person.name}の台詞"><div class="av-speech"><div class="av-speaker-name">${person.name}</div><div class="av-speech-text" id="speech">${spec.mode === 'journey' ? p.intro ?? person.opening : person.opening}</div></div><div class="av-portrait">${picture(`player-${spec.character}`, person.name)}</div></aside></div><div class="av-combat-dock">${meter('speed')}<section class="av-main-panel" id="input-panel" tabindex="-1" aria-label="タイピング入力"><div class="av-input-top"><span id="input-label">言葉を唱える</span>${action('一時停止', 'pause')}</div><div class="av-current-word" id="word"></div><div class="av-reading" id="reading"></div><div class="av-romaji" id="romaji"></div><div class="av-input-status" id="input-status" role="status">最初のキーでスタート · ミスは打ち直し</div><div class="av-next"><span>次の言葉</span><div><strong id="next-word"></strong><span class="av-guide" id="next-guide"></span></div></div></section><div class="av-right-side">${meter('accuracy')}<div class="av-later"><span>その次の言葉</span><strong id="following-word"></strong><span class="av-guide" id="following-guide"></span></div></div></div><div class="av-bottom"><div class="av-shortcuts">Esc 一時停止 ／ IME OFF<br><span id="clock">最初のキーでスタート</span></div><span class="av-footnote">かなの確定と、正確な祈りでスコアを積み重ねよう。</span></div><div id="ime-warning" class="av-ime" role="status" hidden>IMEをオフにしてください（英数入力）</div><div id="achievement" class="av-achievement" role="status" hidden><small>この挑戦の実績</small><strong>${p.sub}への道をひらいた</strong></div></section>`;
@@ -421,6 +432,10 @@ function renderPanel(miss = false) {
   if (panelWord !== w) {
     panelWord = w;
     $('word').innerHTML = w.segments ? w.segments.map(segment => `<span>${esc(segment.display)}</span>`).join('') : esc(w.display);
+    let source = $('word-source');
+    if (!source) { source = document.createElement('p'); source.id = 'word-source'; source.className = 'av-word-source'; panel.append(source); }
+    source.hidden = !w.source;
+    source.innerHTML = w.source ? `<span>${esc(w.source.person ? `${w.source.person} · 要旨（自作）` : `${w.source.category} · 自作解説`)}</span> · <a href="${esc(w.source.url)}" target="_blank" rel="noopener noreferrer">${esc(w.source.title)}</a>` : '';
     for (const id of ['word', 'reading', 'romaji']) $(id).scrollTop = 0;
   }
   if (w.segments) {
@@ -483,6 +498,7 @@ function breakthrough() {
   app.style.setProperty('--av-depth', String(1 + Math.min(round.wordsDone * 0.015 * motion, 0.12)));
 }
 function pause(now = performance.now()) {
+  music.pause();
   if (conversation) return;
   if (view !== 'battle' || !round || round.finished) return;
   round.pause(now); if (round.finished) { end(); return; }
@@ -496,7 +512,7 @@ function pause(now = performance.now()) {
 }
 function resume() {
   if (!round || view !== 'battle') return;
-  round.resume(performance.now()); speed.reset(); audio.ensure(); showModal(null);
+  round.resume(performance.now()); speed.reset(); audio.ensure(); music.resume(); showModal(null);
   for (const animation of animations) animation.play();
   const landscape = main.querySelector<HTMLElement>('.av-landscape');
   if (landscape) { landscape.style.transform = ''; landscape.style.transition = ''; }
@@ -528,6 +544,7 @@ function beginFinale() {
 }
 function end() {
   if (!round || !run || endedRound === round) return;
+  music.stop();
   captureEnd();
   endedRound = round; const finished = round, spec = run, result = round.result(), elapsedMs = round.elapsedMs(performance.now());
   finale = null; resultReadyAt = performance.now() + 500;
@@ -683,7 +700,7 @@ function perform(name: string) {
     start({ dict: chapterDictionary(DAILY_PLACE), mode: 'journey', place: DAILY_PLACE, character, difficulty, seed: daily.seed, daily });
   }
   else if (name === 'start-training') { const dict = DICTIONARIES[dictIndex]; start({ dict, mode: dict.kind === 'passage' ? 'passage' : 'benchmark', place, character }); }
-  else if (name === 'start-passage') start({ dict: DICTIONARIES.find(d => d.kind === 'passage')!, mode: 'passage', place, character });
+  else if (name === 'start-passage') start({ dict: DICTIONARIES.find(d => d.id === 'jp-knowledge-passages')!, mode: 'passage', place, character });
   else if (name === 'retry' && run) start({ ...run, bossOnly: false, parentSession: undefined, initialKanaPerSec: undefined, seed: run.daily?.seed, study: run.mode === 'patch' && run.study ? { lesson: run.study.lesson } : undefined });
   else if (name === 'boss-retry' && run && chapter?.battle.snapshot().outcome === 'lost') start({ ...run, bossOnly: true, parentSession: lastSession, initialKanaPerSec: chapter.battle.snapshot().kanaPerSec, seed: undefined, study: undefined, daily: undefined });
   else if (name === 'study' && view === 'result' && offeredLesson) {
@@ -710,6 +727,8 @@ function perform(name: string) {
   else if (name === 'close-settings') closeSettings();
   else if (name === 'motion') { motion = motion === 0 ? 0.5 : motion === 0.5 ? 1 : 0; settings.set('effects.motion', motion); applyEffects(); }
   else if (name === 'graphics') { lowGraphics = !lowGraphics; settings.set('graphics.low', lowGraphics); applyEffects(); }
+  else if (name === 'knowledge') { const dict = DICTIONARIES.find(d => d.id === 'jp-knowledge')!; start({ dict, mode: 'benchmark', place, character }); }
+  else if (name === 'music') { music.setEnabled(!music.enabled); settings.set('music.enabled', music.enabled); renderSound(); }
   else if (name === 'sound') { audio.enabled = !audio.enabled; settings.set('sound', audio.enabled); audio.ensure(); renderSound(); }
   else if (name === 'metric') { reportMetric = reportMetric === 'latency' ? 'miss' : 'latency'; if (view === 'records') void showRecords(); }
 }
@@ -736,6 +755,7 @@ root.addEventListener('change', event => {
   else if (target.id === 'training-dict' && isDictionaryIndex(DICTIONARIES.length)(Number(target.value))) { dictIndex = Number(target.value); settings.set('dict', dictIndex); }
   else if (target.id === 'record-dict') { const d = [...DICTIONARIES, ...PLACES.map((_, i) => getChapter(i) ? chapterDictionary(i) : journeyDictionary(i))].find(d => d.id === target.value); if (d) { recordDict = d; report = undefined; $('report').textContent = '記録を読み込み中…'; void showRecords(); } }
 });
+$('music-volume').addEventListener('input', event => { music.setVolume(Number((event.target as HTMLInputElement).value)); settings.set('music.volume', music.volume); renderSound(); });
 $('sound-volume').addEventListener('input', event => { audio.setVolume(Number((event.target as HTMLInputElement).value)); settings.set('volume', audio.volume); audio.ensure(); renderSound(); });
 
 // Same composition/modifier/native-control boundaries as the established app.
@@ -831,11 +851,13 @@ window.addEventListener('resize', () => {
   if (view === 'battle' && !conversation && !modal && !finale) focusChapterInput();
 });
 document.addEventListener('visibilitychange', () => {
+  if (document.hidden) music.pause();
+  else if (view === 'battle' && conversation && document.hasFocus()) music.resume();
   if (finale) { if (!document.hidden) end(); }
   else if (document.hidden) pause();
   if (!document.hidden) syncDailyCard(true);
 });
-window.addEventListener('focus', () => syncDailyCard(true));
+window.addEventListener('focus', () => { if (view === 'battle' && conversation && !document.hidden) music.resume(); syncDailyCard(true); });
 setInterval(() => syncDailyCard(), 30_000);
 let lastFrame = performance.now();
 function frame(now: number) {
