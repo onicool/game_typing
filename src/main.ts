@@ -371,7 +371,7 @@ function enterBoss() {
   main.querySelector('.av-battle')!.classList.toggle('av-first-chapter', firstChapter);
   host.insertAdjacentHTML('afterbegin', `<div class="av-combat-scene" role="img" aria-label="${esc(chapter.definition.bossName)}。${firstChapter ? '祈りは守護機へ、反撃はあなたの結界へ' : '光の輪から反撃する'}"></div>`);
   $('seal-note').setAttribute('aria-live', 'off');
-  combat = firstChapter ? new SideCombatScene(host.querySelector('.av-combat-scene')!, $('seal-note'), run!.character)
+  combat = firstChapter ? new SideCombatScene(host.querySelector('.av-combat-scene')!, $('seal-note'), run!.character, { motion: motion > 0 && !reducedMotion.matches, low: lowGraphics, intensity: motion })
     : new CombatScene(host.querySelector('.av-combat-scene')!, $('seal-note'), kind => audio.combatCue(kind), `${chapter.definition.bossName} · 言葉で光の術を放つ`, false);
   main.querySelector('.av-battle')!.classList.toggle('av-side-battle', firstChapter);
   main.querySelector('.av-battle')!.classList.toggle('av-duel-battle', !!run!.combatTrial);
@@ -870,10 +870,11 @@ window.addEventListener('keydown', event => {
   if (round.finished) captureEnd();
   if (outcome.accepted) {
     speed.accepted(event.timeStamp, !!round.log.at(-1)?.afterPause);
-    audio.key(round.stage, outcome.critical, comboTier(round.chain));
     const hit = outcome.wordDone ? 'word' : crossedMilestone(previousWord, previousKana, round.session.kanaDone) ? 'milestone' : 'key';
-    if (combat instanceof SideCombatScene) combat.acceptedKey(keyAction, round.elapsedMs(event.timeStamp), hit);
-    else combat?.hit(hit);
+    if (combat instanceof SideCombatScene) {
+      const cue = combat.acceptedKey(keyAction, round.elapsedMs(event.timeStamp), hit);
+      audio.combatKey(cue.action, cue.character, cue.variant, cue.combo);
+    } else { audio.key(round.stage, outcome.critical, comboTier(round.chain)); combat?.hit(hit); }
     if (outcome.wordDone) { audio.word(round.stage); breakthrough(); }
     $('input-status').textContent = outcome.wordDone ? run?.combatTrial ? '文を完成 · 次の言葉へ' : chapter?.phase === 'boss' ? '祈りが命中' : '封印を突破' : 'ローマ字を打つ';
   } else {

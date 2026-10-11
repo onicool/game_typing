@@ -1,6 +1,7 @@
 import type { BattleEvent, BattleSnapshot } from '../game/battle';
 import type { CombatHit, CombatOptions } from './combat';
-import { battleArt, combatPoses, playerPoses, sentinelPoses, type PlayerPose, type SentinelPose } from './battle-art';
+import { BattleMotion } from './battle-motion';
+import { SpriteActor, warmBattleSprites } from './sprite-actor';
 import { KeyEffects, KEY_EFFECT_MS, KEY_EFFECT_SLOTS, type KeyAction } from './key-effects';
 
 const asset = (name: string) => `${import.meta.env.BASE_URL}fx/kenney/${name}.png`;
@@ -19,8 +20,9 @@ export class SideCombatScene {
   private player: SVGElement;
   private weapon: SVGElement;
   private enemy: SVGElement;
-  private playerSprites: Map<PlayerPose, SVGElement>;
-  private enemySprites: Map<SentinelPose, SVGElement>;
+  private playerActor: SpriteActor;
+  private enemyActor: SpriteActor;
+  private body: BattleMotion;
   private shield: SVGElement;
   private warning: SVGElement;
   private projectiles: SVGElement[];
@@ -42,17 +44,17 @@ export class SideCombatScene {
   private finaleAt: number | null = null;
   private duel: BattleSnapshot['duel'];
 
-  constructor(host: HTMLElement, private label: HTMLElement, character: 'elna' | 'towa') {
+  constructor(host: HTMLElement, private label: HTMLElement, character: 'elna' | 'towa', options?: CombatOptions) {
     host.classList.add('av-side-combat');
-    host.style.setProperty('--battle-landscape', `url("${battleArt('celestial-terrace.webp')}")`);
+    host.style.setProperty('--battle-landscape', `url("${import.meta.env.BASE_URL}battle-art/celestial-terrace.webp")`);
     host.dataset.character = character;
-    const sprites = (actor: string, poses: readonly string[], x: number) => poses.map(pose =>
-      `<image class="side-sprite" data-pose="${pose}" href="${battleArt(`${actor}-${pose}.webp`)}" x="${x}" y="0" width="260" height="247" opacity="${pose === 'idle' ? 1 : 0}"/>`).join('');
+    this.body = new BattleMotion(character, character === 'elna' ? 2 : 4);
+    if (options) this.options = options;
     host.innerHTML = `<div class="side-captions"><span class="side-mode">攻撃 · 1文字で1斬撃</span><span class="side-count">斬撃 0 ／ 反射 0</span></div>
       <svg class="side-vector" viewBox="0 0 800 260" aria-hidden="true">
       <ellipse cx="175" cy="235" rx="62" ry="5" fill="#1a2c43" opacity=".24"/><ellipse cx="650" cy="235" rx="65" ry="5" fill="#1a2c43" opacity=".24"/>
-      <g class="side-player" data-pose="idle">${sprites(character, playerPoses, 22)}</g>
-      <g class="side-enemy" data-pose="idle">${sprites('sentinel', sentinelPoses, 482)}</g>
+      <g class="side-player" data-pose="idle"></g>
+      <g class="side-enemy" data-pose="idle"></g>
       <g class="side-weapon" opacity="0"><path d="M247 90Q273 112 277 133" fill="none" stroke="#d1f7ff" stroke-width="2"/><path d="M253 105Q269 114 277 125" fill="none" stroke="#fff4cd" stroke-width="2"/></g>
       <ellipse class="side-warning" cx="551" cy="117" rx="34" ry="38" fill="#ffc76f15" stroke="#ffd083" stroke-width="2" stroke-dasharray="6 5" opacity="0"/>
       <g class="side-shield" opacity="0"><path class="side-guard-surface" d="M255 94Q312 132 255 187Q279 137 255 94Z" fill="#7ce9fc33" stroke="#a7f4ff" stroke-width="3"/><path class="side-guard-lines" d="M271 118L277 129 267 142 278 153" fill="none" stroke="#d0fbff" stroke-width="2"/>
@@ -66,8 +68,8 @@ export class SideCombatScene {
     this.svg = host.querySelector('svg')!;
     const find = (name: string) => this.svg.querySelector<SVGElement>(`.side-${name}`)!;
     this.player = find('player'); this.weapon = find('weapon'); this.enemy = find('enemy'); this.shield = find('shield'); this.warning = find('warning');
-    this.playerSprites = new Map(playerPoses.map(pose => [pose, this.player.querySelector<SVGElement>(`[data-pose="${pose}"]`)!]));
-    this.enemySprites = new Map(sentinelPoses.map(pose => [pose, this.enemy.querySelector<SVGElement>(`[data-pose="${pose}"]`)!]));
+    this.playerActor = new SpriteActor(this.player, character, 22);
+    this.enemyActor = new SpriteActor(this.enemy, 'sentinel', 482);
     this.outcome = find('outcome'); this.outcomeText = find('outcome-text');
     this.projectiles = [...this.svg.querySelectorAll<SVGElement>('.side-threat')];
     this.nodes = [...this.svg.querySelectorAll<SVGElement>('.side-key-effect')].map(host => {
@@ -75,46 +77,49 @@ export class SideCombatScene {
       return { host, trail: part('trail'), slash: part('slash'), incoming: part('incoming'), reflected: part('reflected'), glint: part('glint'), sparks: part('sparks'), cut: part('cut'), id: 0, visible: false };
     });
     this.mode = host.querySelector('.side-mode')!; this.count = host.querySelector('.side-count')!;
-    this.paint(0, false);
+    this.warmArt(); this.paint(0, false);
   }
-  configure(options: CombatOptions) { this.options = options; this.effects.clearVisuals(); this.lastKeyAt = -Infinity; this.paint(this.lastTime, this.svg.dataset.mode === 'defend'); }
+  private warmArt() {
+    if (this.options.motion && !this.options.low) void warmBattleSprites(this.body.character).then(() => this.paint(this.lastTime, this.svg.dataset.mode === 'defend'));
+  }
+  configure(options: CombatOptions) { this.options = options; this.effects.clearVisuals(); this.body.clear(); this.lastKeyAt = -Infinity; this.warmArt(); this.paint(this.lastTime, this.svg.dataset.mode === 'defend'); }
   setComboTier(_tier: number) { /* One action per key at every combo level. */ }
   hit(_kind: CombatHit) { /* Word and special cues must not create a second swing. */ }
   acceptedKey(action: KeyAction, gameMs: number, kind: CombatHit) {
+    const cue = this.body.accepted(action, gameMs);
     this.effects.emit(action, gameMs, kind !== 'key'); this.lastKeyAt = gameMs; this.lastAction = action;
     this.svg.dataset.accepted = String(this.effects.accepted);
     this.svg.dataset.attacks = String(this.effects.attacks); this.svg.dataset.deflections = String(this.effects.deflections);
     this.count.textContent = `斬撃 ${this.effects.attacks} ／ 反射 ${this.effects.deflections}`;
     // main renders Battle in the same key handler; no extra full-pool repaint.
+    return cue;
   }
   feedback(events: BattleEvent[], gameMs: number) {
     for (const event of events) {
-      if (event.type === 'combo') this.comboAt = gameMs;
+      if (event.type === 'combo') { this.comboAt = gameMs; this.body.combo(gameMs); }
       if (event.type === 'parry' || event.type === 'crack' || event.type === 'chip') {
         this.contact = event.type === 'parry' ? 'parry' : event.type === 'chip' && event.guarded ? 'guard' : 'impact'; this.contactAt = gameMs;
+        this.body.reaction(this.contact === 'impact' ? 'hit' : this.contact, gameMs);
         this.contactDamage = event.type === 'chip' ? event.amount : null;
       }
     }
   }
-  render(snapshot: BattleSnapshot, gameMs: number) { this.duel = snapshot.duel; this.paint(gameMs, !!snapshot.attack); }
+  render(snapshot: BattleSnapshot, gameMs: number) {
+    this.duel = snapshot.duel;
+    if (this.options.motion && !this.options.low) this.body.incoming(snapshot.attack ? this.duel ? this.duel.remaining > 0 ? this.duel.nextAt : null : snapshot.attack.dueAt : null, gameMs);
+    this.paint(gameMs, !!snapshot.attack);
+  }
   finale(ms: number) {
     if (this.finaleAt === null) this.finaleAt = this.lastTime;
     this.paint(this.finaleAt + ms, false); this.svg.dataset.mode = 'finale';
     this.mode.textContent = '決着 · 最後の文字まで届いた';
   }
-  private setPose<T extends string>(actor: SVGElement, sprites: Map<T, SVGElement>, pose: T) {
-    if (actor.dataset.pose === pose) return;
-    sprites.get(actor.dataset.pose as T)?.setAttribute('opacity', '0');
-    sprites.get(pose)!.setAttribute('opacity', '1');
-    actor.dataset.pose = pose;
-  }
   private paint(gameMs: number, defending: boolean) {
     this.lastTime = gameMs;
     const moving = this.options.motion && !this.options.low, intensity = Math.min(.65, this.options.intensity);
     const age = gameMs - this.lastKeyAt, recent = age >= 0 && age < KEY_EFFECT_MS;
-    const poses = combatPoses(age, this.lastAction, defending, moving);
-    this.setPose(this.player, this.playerSprites, poses.player);
-    this.setPose(this.enemy, this.enemySprites, poses.sentinel);
+    this.playerActor.paint(moving ? this.body.player.sample(gameMs) : null, defending, !moving);
+    this.enemyActor.paint(moving ? this.body.enemy.sample(gameMs) : null, false, !moving);
     this.weapon.setAttribute('opacity', recent && this.lastAction === 'attack' ? String(.55 * intensity) : '0');
     this.svg.dataset.mode = defending ? 'defend' : 'attack';
     this.mode.textContent = defending ? '防御 · 1文字で1発を弾く' : '攻撃 · 1文字で1斬撃';

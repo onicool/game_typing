@@ -25,6 +25,25 @@ function install(ctx = device()) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('optional audio never blocks gameplay', () => {
+  it('bounds a same-frame combat burst without delaying later cues', () => {
+    const { ctx } = install(); const audio = new Audio(); audio.ensure();
+    for (let n = 0; n < 100; n++) audio.combatKey('attack', 'elna', n % 4, false);
+    expect(ctx.createOscillator).toHaveBeenCalledTimes(1);
+    expect(ctx.createBufferSource).toHaveBeenCalledTimes(1);
+    ctx.currentTime += .1; audio.combatKey('defend', 'towa', 0, false);
+    expect(ctx.createOscillator).toHaveBeenCalledTimes(2);
+    const tones = ctx.createOscillator.mock.results.map(r => r.value);
+    expect(tones[0].frequency.value).toBe(420);
+    expect(tones[1].frequency.value).toBe(1200);
+  });
+  it('never allocates combat voices while muted, zero volume or suspended', () => {
+    const { ctx } = install(device('suspended')); const audio = new Audio();
+    audio.ensure(); audio.combatKey('attack', 'towa', 5, true);
+    expect(ctx.createOscillator).not.toHaveBeenCalled();
+    ctx.state = 'running'; audio.enabled = false; audio.combatKey('attack', 'elna', 0, false);
+    audio.enabled = true; audio.setVolume(0); audio.combatKey('defend', 'towa', 0, false);
+    expect(ctx.createOscillator).not.toHaveBeenCalled();
+  });
   it('keeps the same brief key sound regardless of speed, combo and previous words', () => {
     const { ctx } = install(); const audio = new Audio(); audio.ensure();
     audio.key(0, false); audio.word(0); audio.key(3, true, 3);

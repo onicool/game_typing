@@ -13,6 +13,7 @@ export class Audio {
   private _volume = DEFAULT_VOLUME;
   private failed = false;
   private resuming: AudioContext | null = null;
+  private lastCombatSoundAt = -Infinity;
   onAvailabilityChange?: () => void;
 
   get unavailable(): boolean { return this.failed; }
@@ -134,6 +135,21 @@ export class Audio {
     this.play(() => {
       const ctx = this.live();
       if (ctx) this.voice(ctx.currentTime, 'sine', 880, 0.035, 0.035, 3000);
+    });
+  }
+
+  /** Short weapon/contact cues. A same-frame key burst never queues audio. */
+  combatKey(action: 'attack' | 'defend', character: 'elna' | 'towa', variant: number, combo: boolean) {
+    this.play(() => {
+      const ctx = this.live(); if (!ctx) return;
+      const t = ctx.currentTime;
+      if (t - this.lastCombatSoundAt < .018 && !combo) return;
+      this.lastCombatSoundAt = t;
+      const guarding = action === 'defend', spear = character === 'elna';
+      this.noiseBurst(t, guarding ? .035 : .045, guarding ? 4200 : spear ? 2200 : 1100,
+        combo ? .055 : .035, 'bandpass', guarding ? 1700 : spear ? 700 : 250);
+      this.voice(t, guarding || !spear ? 'sine' : 'triangle', guarding ? 1200 : (spear ? 420 : 210) + variant * 35,
+        combo ? .09 : .045, combo ? .045 : .028, 5000);
     });
   }
 
