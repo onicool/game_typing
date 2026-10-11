@@ -178,3 +178,96 @@
   #angel-ui-studio .av-side-battle .av-hud { padding-top:8px; }
   #angel-ui-studio .av-side-battle .av-ring-streak { display:none; }
 }
+
+/* The practice screen keeps combat and the current input in the first viewport.
+   Upcoming text stays available in a native disclosure without shifting on keys. */
+#angel-ui-studio .av-playing-duel .av-chrome { min-height:56px; padding:6px 20px; }
+#angel-ui-studio .av-playing-duel .av-chrome nav { display:none; }
+#angel-ui-studio .av-side-battle.av-duel-battle:has(#boss-hud) { min-height:0; padding:0 0 8px; }
+#angel-ui-studio .av-side-battle.av-duel-battle:has(#boss-hud) .av-hud { grid-template-columns:minmax(0,1fr) auto; gap:12px; padding:8px 24px 0; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-pilot { display:none; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-stage { grid-column:1; grid-row:1; text-align:left; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-stage>.av-eyebrow,
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-stage-progress,
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-stage>small,
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-score-box>.av-eyebrow { display:none; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-stage-name { font-size:20px; margin:0; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-boss-hud { margin-top:3px; max-width:600px; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-score { font-size:25px; margin:0; line-height:1.2; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-combo { margin-top:2px; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-arena { flex:none; max-height:none; padding:8px 24px 4px; }
+#angel-ui-studio .av-side-battle.av-duel-battle:has(#boss-hud) .av-combat-scene { height:clamp(140px,24vh,240px); background:linear-gradient(180deg,#0d2237eb,#102d45ed); }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .side-vector { height:calc(100% - 30px); }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .side-captions { min-height:26px; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-obstacle-note { min-height:23px; margin:3px 0 0; }
+#angel-ui-studio .av-battle.av-side-battle.av-duel-battle.av-compact-chapter:has(#boss-hud) .av-combat-dock { grid-template-columns:1fr 1fr; gap:4px 16px; padding:4px 24px 0; }
+#angel-ui-studio .av-side-battle.av-duel-battle:has(#boss-hud) .av-main-panel { padding:8px 16px; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-input-top { font-size:12px; flex-direction:row; align-items:center; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-input-top .av-action { padding:5px 12px; min-height:36px; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-compact-battle-info { margin-top:4px; padding:3px 8px; border:0; background:#0a2033; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-compact-vitals { font-variant-numeric:tabular-nums; }
+#angel-ui-studio .av-battle.av-duel-battle:has(#boss-hud) .av-defense-note { margin:0; line-height:1.5; }
+#angel-ui-studio .av-battle.av-side-battle.av-duel-battle:has(#boss-hud) #battle-feedback { display:none; }
+#angel-ui-studio .av-battle.av-side-battle.av-duel-battle.av-compact-chapter:has(#boss-hud) .av-current-word { font-size:clamp(26px,2.5vw,34px); min-height:0; max-height:92px; overflow:auto; position:relative; margin:6px 0 2px; line-height:1.35; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-reading { font-size:15px; max-height:42px; overflow:auto; position:relative; line-height:1.4; }
+#angel-ui-studio .av-battle.av-side-battle.av-duel-battle.av-compact-chapter:has(#boss-hud) .av-romaji { font-size:clamp(22px,2vw,26px); min-height:0; max-height:76px; overflow:auto; position:relative; line-height:1.45; margin-top:4px; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-input-status { margin-top:4px; font-size:12px; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-word-source { margin:4px 0 0; font-size:11px; line-height:1.5; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-duel-queue { display:block; margin-top:4px; font-size:12px; }
+#angel-ui-studio .av-duel-queue summary { color:#bdcddd; cursor:pointer; padding:3px 0; }
+#angel-ui-studio .av-duel-queue summary:focus-visible { outline:2px solid #98dce9; outline-offset:2px; }
+#angel-ui-studio .av-duel-previews { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding-top:4px; }
+#angel-ui-studio .av-duel-previews .av-next,
+#angel-ui-studio .av-duel-previews .av-later { display:block; max-height:none; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-meter { padding:0; display:flex; gap:8px; justify-content:center; align-items:center; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-meter-label { font-size:12px; margin:0; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-gauge { width:auto; height:26px; aspect-ratio:auto; margin:0; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-gauge svg,
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-meter-caption { display:none; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-meter-number { position:static; flex-direction:row; gap:4px; padding:0; height:26px; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-meter-number strong { font-size:18px; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-meter-number small { margin:0; font-size:11px; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-bottom { padding:2px 24px 0; }
+#angel-ui-studio .av-duel-battle:has(#boss-hud) .av-shortcuts { font-size:11px; }
+@media(max-width:620px) {
+  #angel-ui-studio .av-playing-duel .av-chrome { padding:4px 12px; }
+  #angel-ui-studio .av-side-battle.av-duel-battle:has(#boss-hud) .av-hud { padding:6px 12px 0; }
+  #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-stage-name { font-size:18px; }
+  #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-arena { padding:6px 12px 3px; }
+  #angel-ui-studio .av-battle.av-side-battle.av-duel-battle.av-compact-chapter:has(#boss-hud) .av-combat-dock { padding:4px 12px 0; }
+  #angel-ui-studio .av-side-battle.av-duel-battle:has(#boss-hud) .av-main-panel { padding:8px 10px; }
+  #angel-ui-studio .av-duel-battle:has(#boss-hud) .side-captions { gap:4px; padding:4px 8px 0; font-size:11px; }
+  #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-compact-vitals { flex-wrap:wrap; gap:0 8px; }
+  #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-duel-previews { grid-template-columns:1fr; }
+  #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-obstacle-note { font-size:11px; }
+  #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-bottom { padding:2px 12px 0; }
+}
+@media(max-height:650px) {
+  #angel-ui-studio .av-side-battle.av-duel-battle:has(#boss-hud) .av-combat-scene { height:126px; }
+  #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-obstacle-note { font-size:11px; }
+  #angel-ui-studio .av-battle.av-side-battle.av-duel-battle.av-compact-chapter:has(#boss-hud) .av-current-word { max-height:72px; font-size:26px; }
+  #angel-ui-studio .av-battle.av-side-battle.av-duel-battle.av-compact-chapter:has(#boss-hud) .av-romaji { max-height:64px; font-size:22px; }
+}
+#angel-ui-studio .side-shield[data-contact=impact] .side-guard-surface { stroke:#ffb49a; fill:#ff9d7b22; stroke-dasharray:7 5; }
+#angel-ui-studio .side-shield[data-contact=impact] .side-guard-lines { opacity:0; }
+#angel-ui-studio .side-shield[data-contact=impact] .side-impact-lines { opacity:1; }
+#angel-ui-studio .side-outcome[data-kind=impact] rect { stroke:#ffb49a; }
+#angel-ui-studio .side-outcome[data-kind=impact] text { fill:#ffd4c4; }
+#angel-ui-studio .side-outcome[data-kind=combo] rect { stroke:#ecd29b; }
+#angel-ui-studio .side-outcome[data-kind=combo] text { fill:#ffebba; }
+@media(max-height:520px) and (min-width:621px) {
+  #angel-ui-studio .av-playing-duel .av-chrome { min-height:44px; padding:3px 20px; }
+  #angel-ui-studio .av-playing-duel #open-settings { min-height:36px; padding:4px 12px; }
+  #angel-ui-studio .av-side-battle.av-duel-battle:has(#boss-hud) .av-combat-scene { height:96px; }
+  #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-stage-name { font-size:16px; }
+  #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-hud { padding-top:4px; }
+  #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-reading { max-height:21px; }
+  #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-obstacle-note { min-height:18px; line-height:1.4; padding:0 6px; }
+  #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-input-top .av-action { min-height:30px; }
+  #angel-ui-studio .av-battle.av-side-battle.av-duel-battle.av-compact-chapter:has(#boss-hud) .av-romaji { max-height:32px; }
+}
+@media(max-height:650px) and (max-width:620px) {
+  #angel-ui-studio .av-side-battle.av-duel-battle:has(#boss-hud) .av-combat-scene { height:108px; }
+}
+/* Text reflow must not let browser scroll anchoring move the battle mid-input. */
+#angel-ui-studio .av-playing-duel { overflow-anchor:none; }

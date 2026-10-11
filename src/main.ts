@@ -77,6 +77,7 @@ let report: { data: Report; dict: Dictionary } | undefined;
 let recordDict = DICTIONARIES[dictIndex];
 let reportMetric: 'latency' | 'miss' = 'latency';
 let panelWord: Word | undefined;
+let panelWordIndex = -1;
 let animations: Animation[] = [];
 let modal: 'pause-dialog' | 'settings-dialog' | null = null;
 let combat: CombatScene | SideCombatScene | null = null;
@@ -142,6 +143,7 @@ function showModal(id: typeof modal) {
   dialogs.show(id ? $(id) : null, origin);
 }
 function updateNav() {
+  app.classList.toggle('av-playing-duel', view === 'battle' && !!run?.combatTrial);
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-view]')) {
     button.disabled = view === 'battle' || (view === 'result' && performance.now() < resultReadyAt);
     button.setAttribute('aria-pressed', String(button.dataset.view === view));
@@ -273,7 +275,7 @@ function start(spec: Run) {
     try { opts.source = new PatchSource(spec.dict.words, spec.dict.id, spec.vulns ?? [], prefs, { seed: opts.seed!, focus: spec.focus }); }
     catch { changeView('training'); main.insertAdjacentHTML('beforeend', '<p class="av-help" role="status">この辞書は弱点練習の候補が不足しています。通常練習を利用してください。</p>'); return; }
   }
-  round = new Round(spec.dict, prefs, opts); scoring = emptyScore(); speed.reset(); panelWord = undefined;
+  round = new Round(spec.dict, prefs, opts); scoring = emptyScore(); speed.reset(); panelWord = undefined; panelWordIndex = -1;
   refreshProgress();
   music.start(MUSIC_TRACKS[spec.place]); audio.ensure(); stopAnimations(); app.style.setProperty('--av-depth', '1');
   view = 'battle'; updateNav(); showModal(null);
@@ -285,7 +287,9 @@ function start(spec: Run) {
     main.querySelector('.av-quest-title')!.textContent = chapter.definition.quest;
     $('quest-note').insertAdjacentHTML('afterend', '<div id="defense-note" class="av-defense-note"></div><div id="battle-feedback" class="av-battle-feedback" role="status"></div>');
     $('input-panel').querySelector('.av-input-top')!.insertAdjacentHTML('afterend', '<div id="compact-battle-info" class="av-compact-battle-info" aria-label="戦闘の状況" hidden><div class="av-compact-vitals"><span id="compact-hp"></span><span id="compact-barrier"></span></div></div>');
-    $('input-panel').insertAdjacentHTML('beforeend', '<div id="chapter-queue" class="av-chapter-queue" hidden></div>');
+    $('input-panel').insertAdjacentHTML('beforeend', spec.combatTrial
+      ? '<details id="chapter-queue" class="av-chapter-queue av-duel-queue" hidden><summary>次の言葉を見る</summary><div class="av-duel-previews"></div></details>'
+      : '<div id="chapter-queue" class="av-chapter-queue" hidden></div>');
     const later = main.querySelector<HTMLElement>('.av-later')!, copy = document.createElement('div');
     copy.append(later.querySelector('strong')!, later.querySelector('.av-guide')!); later.append(copy);
     for (const host of [$('input-panel'), main.querySelector<HTMLElement>('.av-next')!, main.querySelector<HTMLElement>('.av-later')!]) {
@@ -343,17 +347,17 @@ function advanceConversation(skip = false) {
 }
 function focusChapterInput() {
   const panel = $('input-panel'); panel.focus({ preventScroll: true });
-  if (combat instanceof SideCombatScene && innerWidth > 850) { window.scrollTo({ top: 0, behavior: 'instant' }); return; }
+  if (run?.combatTrial || combat instanceof SideCombatScene && innerWidth > 850) { window.scrollTo({ top: 0, behavior: 'instant' }); return; }
   panel.scrollIntoView({ block: compactChapter.matches ? 'center' : 'nearest', behavior: 'instant' });
 }
 function layoutChapter() {
   const study = run?.mode === 'patch' && run.study;
   if ((!chapter && !study) || view !== 'battle') return;
-  const compact = compactChapter.matches, panel = $('input-panel'), queue = $(chapter ? 'chapter-queue' : 'study-queue');
+  const compact = !!run?.combatTrial || compactChapter.matches, panel = $('input-panel'), queue = $(chapter ? 'chapter-queue' : 'study-queue');
   const next = main.querySelector<HTMLElement>('.av-next')!, later = main.querySelector<HTMLElement>('.av-later')!;
   const info = $('compact-battle-info');
   main.querySelector('.av-battle')!.classList.toggle('av-compact-chapter', compact);
-  if (compact) { queue.append(next, later); if (info) info.append($('defense-note'), $('battle-feedback')); }
+  if (compact) { (queue.querySelector('.av-duel-previews') ?? queue).append(next, later); if (info) info.append($('defense-note'), $('battle-feedback')); }
   else { panel.insertBefore(next, queue); main.querySelector('.av-right-side')!.append(later); if (chapter) main.querySelector('.av-quest')!.append($('defense-note'), $('battle-feedback')); }
   queue.hidden = !compact; if (info) info.hidden = !compact || chapter!.phase !== 'boss';
 }
@@ -370,6 +374,7 @@ function enterBoss() {
   combat = firstChapter ? new SideCombatScene(host.querySelector('.av-combat-scene')!, $('seal-note'), run!.character)
     : new CombatScene(host.querySelector('.av-combat-scene')!, $('seal-note'), kind => audio.combatCue(kind), `${chapter.definition.bossName} · 言葉で光の術を放つ`, false);
   main.querySelector('.av-battle')!.classList.toggle('av-side-battle', firstChapter);
+  main.querySelector('.av-battle')!.classList.toggle('av-duel-battle', !!run!.combatTrial);
   if (firstChapter) host.querySelector('.av-combat-scene')!.setAttribute('aria-label', '左の剣士と右の守護機。正しい1文字ごとに斬撃、または敵の弾を反射');
   $('boss-hud').hidden = false; main.querySelector('.av-quest-title')!.textContent = chapter.definition.bossQuest;
   main.querySelector('.av-route-label')!.textContent = `${chapter.definition.title} · ボス戦`; $('speech').textContent = chapter.definition.opening(run!.character);
@@ -442,17 +447,18 @@ function renderBattle(now: number) {
 function follow(container: HTMLElement, marker: HTMLElement | null) {
   if (!marker) return;
   const top = marker.offsetTop, bottom = top + marker.offsetHeight;
-  if (top < container.scrollTop) container.scrollTop = top;
+  if (top < container.scrollTop || marker.offsetHeight > container.clientHeight) container.scrollTop = top;
   else if (bottom > container.scrollTop + container.clientHeight) container.scrollTop = bottom - container.clientHeight;
 }
 function renderPanel(miss = false) {
   if (!round || !run || view !== 'battle' || finale) return;
   const s = round.session, w = round.word, long = !!w.segments;
+  const changedWord = panelWord !== w || panelWordIndex !== round.wordsDone;
   const panel = $('input-panel'); panel.classList.toggle('long-input', long); panel.classList.toggle('miss', miss);
   main.querySelector('.av-next > span')!.textContent = long ? '次の文章（冒頭）' : '次の言葉';
   main.querySelector('.av-later > span')!.textContent = long ? 'その次の文章（冒頭）' : 'その次の言葉';
-  if (panelWord !== w) {
-    panelWord = w;
+  if (changedWord) {
+    panelWord = w; panelWordIndex = round.wordsDone;
     $('word').innerHTML = w.segments ? w.segments.map(segment => `<span>${esc(segment.display)}</span>`).join('') : esc(w.display);
     let source = $('word-source');
     if (!source) { source = document.createElement('p'); source.id = 'word-source'; source.className = 'av-word-source'; panel.append(source); }
@@ -469,14 +475,18 @@ function renderPanel(miss = false) {
   const reading = run.dict.id.startsWith('jp') ? normalizeReading(w.reading) : '';
   $('reading').innerHTML = `<span class="done">${esc(reading.slice(0, s.kanaDone))}</span><span class="reading-position">${esc(reading.slice(s.kanaDone, s.kanaDone + 1))}</span>${esc(reading.slice(s.kanaDone + 1))}`;
   $('romaji').innerHTML = `<span class="av-typed">${esc(s.typed)}</span><span class="current-unit">${esc(s.guide.slice(s.typed.length, s.typed.length + 1)) || ' '}</span>${esc(s.guide.slice(s.typed.length + 1))}`;
-  if (long) { follow($('reading'), $('reading').querySelector('.reading-position')); follow($('romaji'), $('romaji').querySelector('.current-unit')); }
-  $('input-label').textContent = long ? '長文 · 句読点は , と .' : run.mode === 'patch' ? `${run.study ? 'セラの修行場' : '弱点練習'} · ${run.focus ?? '祈りの反復'}` : chapter && run.difficulty === 'seraph' ? '熾天 · 言葉を唱える' : '言葉を唱える';
-  const remaining = run.mode === 'journey' ? round.wordLimit - round.wordsDone - 1 : Infinity;
-  for (const [prefix, word, available] of [['next', round.nextWord, remaining > 0], ['following', round.followingWord, remaining > 1]] as const) {
-    const preview = word.segments?.[0] ?? word;
-    $(`${prefix}-word`).textContent = available ? preview.display : 'この道中の終わり';
-    $(`${prefix}-word`).title = available ? word.display : '';
-    $(`${prefix}-guide`).textContent = available ? new TypingSession(preview.reading, { prefs }).guide : '';
+  if (long || run.combatTrial) { follow($('reading'), $('reading').querySelector('.reading-position')); follow($('romaji'), $('romaji').querySelector('.current-unit')); }
+  $('input-label').textContent = long ? '長文 · 句読点は , と .' : run.combatTrial ? '言葉を打つ · IME OFF' : run.mode === 'patch' ? `${run.study ? 'セラの修行場' : '弱点練習'} · ${run.focus ?? '祈りの反復'}` : chapter && run.difficulty === 'seraph' ? '熾天 · 言葉を唱える' : '言葉を唱える';
+  // Previews only change with the word index, including consecutive identical words.
+  // Avoid rebuilding two romaji sessions for every accepted letter of a passage.
+  if (changedWord) {
+    const remaining = run.mode === 'journey' ? round.wordLimit - round.wordsDone - 1 : Infinity;
+    for (const [prefix, word, available] of [['next', round.nextWord, remaining > 0], ['following', round.followingWord, remaining > 1]] as const) {
+      const preview = word.segments?.[0] ?? word;
+      $(`${prefix}-word`).textContent = available ? preview.display : 'この道中の終わり';
+      $(`${prefix}-word`).title = available ? word.display : '';
+      $(`${prefix}-guide`).textContent = available ? new TypingSession(preview.reading, { prefs }).guide : '';
+    }
   }
   const fraction = s.kanaDone / Math.max(1, normalizeReading(w.reading).length);
   $('seal').style.setProperty('--charge', `${fraction * 100}%`);

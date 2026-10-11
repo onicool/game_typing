@@ -3,7 +3,8 @@ import type { CombatHit, CombatOptions } from './combat';
 import { KeyEffects, KEY_EFFECT_MS, KEY_EFFECT_SLOTS, type KeyAction } from './key-effects';
 
 const asset = (name: string) => `${import.meta.env.BASE_URL}fx/kenney/${name}.png`;
-const shape = `<path class="side-slash" d="M-44 42Q-12 -64 50 -40Q14 -20 -44 42Z" fill="#d3faff"/>
+const shape = `<path class="side-trail" d="M-350 16Q-195 -22 -28 -8" fill="none" stroke="#9de8ff" stroke-width="2" stroke-linecap="round"/>
+  <path class="side-slash" d="M-44 42Q-12 -64 50 -40Q14 -20 -44 42Z" fill="#d3faff"/>
   <path class="side-incoming" d="M92 0H0M16 -5L0 0 16 5" fill="none" stroke="#ffc67d" stroke-width="3"/>
   <path class="side-reflected" d="M-32 -4L6 -9 20 0 6 9 -32 4 -19 0Z" fill="#a7f2ff" stroke="#ecfeff"/>
   <image class="side-glint" href="${asset('light_02')}" x="-35" y="-35" width="70" height="70"/>
@@ -20,13 +21,16 @@ export class SideCombatScene {
   private shield: SVGElement;
   private warning: SVGElement;
   private projectiles: SVGElement[];
-  private nodes: { host: SVGElement; slash: SVGElement; incoming: SVGElement; reflected: SVGElement; glint: SVGElement; sparks: SVGElement; cut: SVGElement }[];
+  private nodes: { host: SVGElement; trail: SVGElement; slash: SVGElement; incoming: SVGElement; reflected: SVGElement; glint: SVGElement; sparks: SVGElement; cut: SVGElement; id: number; visible: boolean }[];
+  private outcome: SVGElement;
+  private outcomeText: SVGElement;
   private effects = new KeyEffects();
   private options: CombatOptions = { motion: true, low: false, intensity: .5 };
   private lastKeyAt = -Infinity;
   private lastAction: KeyAction = 'attack';
   private contactAt = -Infinity;
-  private contact: 'guard' | 'impact' | null = null;
+  private contact: 'guard' | 'parry' | 'impact' | null = null;
+  private contactDamage: number | null = null;
   private comboAt = -Infinity;
   private lastTime = 0;
   private lastLabel = '';
@@ -66,18 +70,21 @@ export class SideCombatScene {
         <path d="M182 69L191 80 182 91 173 80Z" fill="#a3f1ff" stroke="#effaff"/>
       </g>
       <ellipse class="side-warning" cx="551" cy="117" rx="34" ry="38" fill="#ffc76f15" stroke="#ffd083" stroke-width="2" stroke-dasharray="6 5" opacity="0"/>
-      <g class="side-shield" opacity="0"><path d="M255 94Q312 132 255 187Q279 137 255 94Z" fill="#7ce9fc33" stroke="#a7f4ff" stroke-width="3"/><path d="M271 118L277 129 267 142 278 153" fill="none" stroke="#d0fbff" stroke-width="2"/></g>
+      <g class="side-shield" opacity="0"><path class="side-guard-surface" d="M255 94Q312 132 255 187Q279 137 255 94Z" fill="#7ce9fc33" stroke="#a7f4ff" stroke-width="3"/><path class="side-guard-lines" d="M271 118L277 129 267 142 278 153" fill="none" stroke="#d0fbff" stroke-width="2"/>
+        <path class="side-impact-lines" d="M252 116L274 129 251 142 271 157M248 130L237 122M250 150L239 157" fill="none" stroke="#ffb49a" stroke-width="4" opacity="0"/></g>
       <g fill="#ffc77d" stroke="#ffedc9">${Array.from({length: 4}, () => '<path class="side-threat" d="M-15 -4L0 -7 13 0 0 7 -15 4Z" opacity="0"/>').join('')}</g>
       <g class="side-key-pool">${Array.from({length: KEY_EFFECT_SLOTS}, () => `<g class="side-key-effect" opacity="0">${shape}</g>`).join('')}</g>
+      <g class="side-outcome" transform="translate(400 26)" opacity="0"><rect x="-83" y="-17" width="166" height="34" rx="6" fill="#0b2134" stroke="#a7f4ff"/><text class="side-outcome-text" text-anchor="middle" y="5" font-size="16" fill="#d3faff"></text></g>
       <text x="156" y="248" fill="#dce8f4" font-size="14" text-anchor="middle">${character === 'elna' ? 'エルナ' : 'トワ'}</text><text x="635" y="248" fill="#dce8f4" font-size="14" text-anchor="middle">守護機</text>
       </svg>`;
     this.svg = host.querySelector('svg')!;
     const find = (name: string) => this.svg.querySelector<SVGElement>(`.side-${name}`)!;
     this.player = find('player'); this.weapon = find('weapon'); this.enemy = find('enemy'); this.shield = find('shield'); this.warning = find('warning');
+    this.outcome = find('outcome'); this.outcomeText = find('outcome-text');
     this.projectiles = [...this.svg.querySelectorAll<SVGElement>('.side-threat')];
     this.nodes = [...this.svg.querySelectorAll<SVGElement>('.side-key-effect')].map(host => {
       const part = (cls: string) => host.querySelector<SVGElement>(`.side-${cls}`)!;
-      return { host, slash: part('slash'), incoming: part('incoming'), reflected: part('reflected'), glint: part('glint'), sparks: part('sparks'), cut: part('cut') };
+      return { host, trail: part('trail'), slash: part('slash'), incoming: part('incoming'), reflected: part('reflected'), glint: part('glint'), sparks: part('sparks'), cut: part('cut'), id: 0, visible: false };
     });
     this.mode = host.querySelector('.side-mode')!; this.count = host.querySelector('.side-count')!;
     this.paint(0, false);
@@ -96,7 +103,8 @@ export class SideCombatScene {
     for (const event of events) {
       if (event.type === 'combo') this.comboAt = gameMs;
       if (event.type === 'parry' || event.type === 'crack' || event.type === 'chip') {
-        this.contact = event.type === 'parry' || event.type === 'chip' && event.guarded ? 'guard' : 'impact'; this.contactAt = gameMs;
+        this.contact = event.type === 'parry' ? 'parry' : event.type === 'chip' && event.guarded ? 'guard' : 'impact'; this.contactAt = gameMs;
+        this.contactDamage = event.type === 'chip' ? event.amount : null;
       }
     }
   }
@@ -119,9 +127,14 @@ export class SideCombatScene {
     this.mode.textContent = defending ? '防御 · 1文字で1発を弾く' : '攻撃 · 1文字で1斬撃';
     if (this.duel) this.mode.textContent += ` · あと${Math.max(0, (this.duel.endsAt - gameMs) / 1000).toFixed(1)}秒${defending ? ` · 反撃あと${this.duel.remaining}回` : ''}`;
     this.warning.setAttribute('opacity', defending ? '.8' : '0');
-    const contact = gameMs - this.contactAt < 500 ? this.contact : null;
+    const contact = gameMs - this.contactAt < 650 ? this.contact : null;
     this.shield.setAttribute('opacity', defending || (recent && this.lastAction === 'defend') || contact ? '1' : '0');
-    this.shield.setAttribute('stroke', contact === 'impact' ? '#ffb396' : '#a7f4ff');
+    this.shield.dataset.contact = contact ?? 'ready';
+    const combo = gameMs - this.comboAt < 900 && this.comboAt >= this.contactAt;
+    const result = combo ? 'combo' : contact;
+    this.outcome.setAttribute('opacity', result ? '1' : '0');
+    this.outcome.dataset.kind = result ?? '';
+    this.outcomeText.textContent = combo ? '✦ コンボ完成' : contact === 'parry' ? '◇ パリィ完成' : contact === 'guard' ? '◇ 部分ガード' : contact === 'impact' ? this.contactDamage === null ? '⚡ 被弾' : `⚡ ガード −${this.contactDamage}` : '';
     for (let i = 0; i < this.projectiles.length; i++) {
       const projectile = this.projectiles[i];
       const remaining = this.duel?.remaining ?? 4;
@@ -130,28 +143,40 @@ export class SideCombatScene {
         : moving ? ((gameMs % 1300) / 1300 + i / 4) % 1 : i / 4;
       projectile.setAttribute('transform', `translate(${535 - progress * 255 + (i ? i * 20 : 0)} ${130 + Math.sin(i * 2) * 18}) rotate(180)`);
     }
+    const activeCount = this.effects.slots.reduce((n, effect) => n + (effect && gameMs >= effect.at && gameMs - effect.at < KEY_EFFECT_MS ? 1 : 0), 0);
     for (let i = 0; i < this.nodes.length; i++) {
       const node = this.nodes[i], effect = this.effects.slots[i];
       const elapsed = effect ? gameMs - effect.at : Infinity;
-      if (!effect || elapsed < 0 || elapsed >= KEY_EFFECT_MS) { node.host.setAttribute('opacity', '0'); continue; }
+      if (!effect || elapsed < 0 || elapsed >= KEY_EFFECT_MS) {
+        if (node.visible) node.host.setAttribute('opacity', '0');
+        node.visible = false; continue;
+      }
       const progress = moving ? elapsed / KEY_EFFECT_MS : 0;
       const lane = (effect.id % 5 - 2) * 9, attack = effect.action === 'attack';
       const x = attack ? 620 : 278, y = (attack ? 112 : 137) + lane;
-      node.host.dataset.id = String(effect.id); node.host.dataset.action = effect.action;
-      node.host.setAttribute('transform', `translate(${x} ${y})`);
-      node.host.setAttribute('opacity', String(moving ? 1 - progress : .7));
-      node.slash.setAttribute('opacity', attack ? '.85' : '0');
-      node.slash.setAttribute('transform', `rotate(${effect.id % 2 ? -25 : 25}) scale(${effect.strong ? 1.25 : .85})`);
+      const latest = effect.id === this.effects.accepted;
+      // Every key owns a slot, while older overlapping flashes become quieter.
+      // Reuse static geometry until a slot is replaced; expired nodes stay asleep.
+      if (node.id !== effect.id) {
+        node.id = effect.id;
+        node.host.dataset.id = String(effect.id); node.host.dataset.action = effect.action;
+        node.host.setAttribute('transform', `translate(${x} ${y})`);
+        node.slash.setAttribute('opacity', attack ? '.85' : '0');
+        node.slash.setAttribute('transform', `rotate(${effect.id % 2 ? -25 : 25}) scale(${effect.strong ? 1.1 : .7})`);
+        node.reflected.setAttribute('opacity', attack ? '0' : '1');
+        node.cut.setAttribute('transform', `rotate(${effect.id % 2 ? 60 : -65})`);
+      }
+      node.visible = true;
+      node.host.setAttribute('opacity', String((moving ? 1 - progress : .7) * (latest ? 1 : .65 / Math.sqrt(activeCount))));
+      node.trail.setAttribute('opacity', attack && progress < .45 ? '.6' : '0');
       node.incoming.setAttribute('opacity', !attack && progress < .35 ? '.8' : '0');
-      node.reflected.setAttribute('opacity', attack ? '0' : '1');
       node.reflected.setAttribute('transform', `translate(${moving ? progress * 270 : 18} ${moving ? -progress * 30 : -4}) rotate(-10)`);
-      node.glint.setAttribute('opacity', this.options.low ? '0' : '.45');
+      node.glint.setAttribute('opacity', this.options.low ? '0' : latest ? '.28' : '.08');
       node.glint.setAttribute('transform', `scale(${.8 + progress * .6})`);
       node.sparks.setAttribute('transform', `rotate(${effect.id * 47 % 360}) scale(${.7 + progress * 1.1})`);
-      node.cut.setAttribute('opacity', attack && !this.options.low ? '.32' : '0');
-      node.cut.setAttribute('transform', `rotate(${effect.id % 2 ? 60 : -65})`);
+      node.cut.setAttribute('opacity', attack && !this.options.low && latest ? '.16' : '0');
     }
-    const text = gameMs - this.comboAt < 700 && this.comboAt >= this.contactAt ? 'コンボ完成！ 最後の文字までつながった' : contact === 'impact' ? '小さな被弾 · そのまま入力を続けよう' : contact === 'guard' ? '防御成功 · 弾き返し' : defending ? '敵の弾を1文字ずつ反射。金の枠の言葉を完成させよう' : '正しい1文字ごとに剣を振り、守護機へ斬撃';
+    const text = combo ? 'コンボ完成！ 最後の文字までつながった' : contact === 'impact' ? '被弾 · そのまま入力を続けよう' : contact === 'parry' ? this.duel ? 'パリィ完成！ 被弾分のガードも回復' : 'パリィ完成！ 弾き返し' : contact === 'guard' ? '部分ガード · 入力した分で1発を防いだ' : defending ? '敵の弾を1文字ずつ反射。金の枠の言葉を完成させよう' : '正しい1文字ごとに剣を振り、守護機へ斬撃';
     if (text !== this.lastLabel) { this.label.textContent = text; this.lastLabel = text; }
   }
 }

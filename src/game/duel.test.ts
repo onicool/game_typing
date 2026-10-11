@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { Duel, DUEL_TUNING } from './duel';
 import type { InputView } from './battle';
 import { Round } from './round';
+import { TypingSession } from '../engine/romaji';
+import { KNOWLEDGE_WORDS, KNOWLEDGE_PASSAGES } from '../content/knowledge';
 const view = (keys = 40, index = 0): InputView => ({ current: { index, kana: keys }, remainingKana: keys, remainingKeys: keys,
   previews: [{ index: index + 1, kana: keys }, { index: index + 2, kana: keys }] });
 const fresh = (keys = 40) => { const d = new Duel(2); d.startBoss(0); d.tick(0, view(keys)); return d; };
@@ -57,6 +59,22 @@ describe('gentle first-stage duel', () => {
     expect(short.snapshot().duel!.endsAt).toBe(8000);
     expect(long.snapshot().duel!.endsAt).toBe(400000);
     expect(long.snapshot().duel!.packets).toBe(8);
+  });
+  it.each([['short', KNOWLEDGE_WORDS], ['long', KNOWLEDGE_PASSAGES]] as const)('lets every actual %s text finish at the same 2.5 accepted keys/second', (_kind, words) => {
+    for (const word of words) {
+      const session = new TypingSession(word.reading), keys = session.guide;
+      const d = fresh(keys.length), deadline = d.snapshot().duel!.endsAt;
+      for (let i = 0; i < keys.length; i++) {
+        const at = i * 400;
+        d.tick(at, view(keys.length - i));
+        expect(session.input(keys[i]).accepted).toBe(true);
+        d.acceptedKey(at, view(keys.length - i), i === keys.length - 1 ? view(40, 1) : view(session.guide.length - session.typed.length));
+      }
+      expect(session.complete).toBe(true);
+      expect(deadline).toBeGreaterThanOrEqual(keys.length * 400);
+      expect(d.wordDone({ index: 0, kana: word.reading.length, clean: true, gameMs: (keys.length - 1) * 400 }, view(40, 1)))
+        .toContainEqual({ type: 'combo', clean: true });
+    }
   });
   it('adjusts guard targets for alternate romaji instead of requiring the original spelling', () => {
     const d = fresh(3); complete(d, 3); d.acceptedKey(1001, view(3, 1), view(1, 1));
