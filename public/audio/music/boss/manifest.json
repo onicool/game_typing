@@ -1,0 +1,70 @@
+{
+  "generator": "Suno v6",
+  "permission": "The provider confirmed permission to use these tracks in this game and to distribute them in its public GitHub repository. This is not a blanket license for other uses.",
+  "terms_url": "https://suno.com/terms-of-service",
+  "tracks": [
+    {
+      "stage": 1,
+      "boss": "sera",
+      "title": "同じ空を阻む翼",
+      "file": "stage_01_boss_sera.mp3",
+      "source_url": "https://suno.com/song/401be329-2c78-4a17-ad71-8246be94e220",
+      "duration_seconds": 211.8535,
+      "sha256": "4a780110068cecfa86ce252fdf09f797b6b0526a1470665b90cef14aa9914599"
+    },
+    {
+      "stage": 2,
+      "boss": "steward",
+      "title": "威張る金貨と踊る風",
+      "file": "stage_02_boss_steward.mp3",
+      "source_url": "https://suno.com/song/a6906d60-3494-4a96-bde9-013ea8f82c1d",
+      "duration_seconds": 157.1735,
+      "sha256": "a0834f12e3fb40000eaf06edc913e103295d88d91a9e077840a4408d9428e1af"
+    },
+    {
+      "stage": 3,
+      "boss": "nico",
+      "title": "奪う手と待つ灯",
+      "file": "stage_03_boss_nico.mp3",
+      "source_url": "https://suno.com/song/d1694a9e-1793-49be-b1c4-60e47663fbef",
+      "duration_seconds": 178.8135,
+      "sha256": "047e7c0c5168a82bbc0aa51ea54fb3391f5ae523d378cbfaa526ed79421f3b47"
+    },
+    {
+      "stage": 4,
+      "boss": "marta",
+      "title": "ひとつの瓶、ふたつの流れ",
+      "file": "stage_04_boss_marta.mp3",
+      "source_url": "https://suno.com/song/6c850c13-e4d2-408e-ab37-edacc7ecbaaa",
+      "duration_seconds": 211.2135,
+      "sha256": "c676b82a61711dccda2b714fab19afa2d48f82e08676fa3d3fc92b8af7626b4d"
+    },
+    {
+      "stage": 5,
+      "boss": "vel",
+      "title": "拍手を奪う仮面",
+      "file": "stage_05_boss_vel.mp3",
+      "source_url": "https://suno.com/song/035afb00-9711-476d-889c-beac9f9734b8",
+      "duration_seconds": 172.0135,
+      "sha256": "fda0a9cd2fb72a4e67b3f430c72de97d3c4bf3ac24c2e2f419119619db8e2fe3"
+    },
+    {
+      "stage": 6,
+      "boss": "isaac",
+      "title": "最後の橋に立つ盾",
+      "file": "stage_06_boss_isaac.mp3",
+      "source_url": "https://suno.com/song/f379c3b5-1562-4eab-a844-ae099ce329e4",
+      "duration_seconds": 188.4935,
+      "sha256": "7c0e926298696c817d7d8b7510c7fb9fe63545da87667afab42ead0a2c90d66f"
+    },
+    {
+      "stage": 7,
+      "boss": "aster",
+      "title": "白き光が問い返す",
+      "file": "stage_07_boss_aster.mp3",
+      "source_url": "https://suno.com/song/5b12c691-a4db-41bb-9886-4ef2f0802e6f",
+      "duration_seconds": 258.0135,
+      "sha256": "b06f3d762ee9440230c2d2cd3059f5a44ca6be9bb740ee103c01d7e43e3d8f60"
+    }
+  ]
+}
