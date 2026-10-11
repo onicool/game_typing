@@ -243,6 +243,23 @@ describe('session save status', () => {
     expect(await pending).toBe('persistent');
   });
 
+  it('retries a memory claim with the original daily/Sera metadata and input log atomically', async () => {
+    const fixture = recoveryFixture(); fixture.fail('throw');
+    const { saveSession, loadSessions } = await import('./store');
+    const awarded = { ...meta, memoryVersion: 1, memoryBits: 7, dailyDate: '2026-10-08', dailyZone: 'UTC',
+      dailyVersion: 1, trainingSession: 'original-training', parentSession: 'original-parent' };
+    const original = { ...awarded };
+    expect(await saveSession([event], awarded)).toBe('memory');
+    awarded.memoryBits = 0; awarded.dailyDate = 'changed';
+    expect(await loadSessions()).toEqual([original]);
+    expect(fixture.disk.get('sessions')!.size).toBe(0); expect(fixture.disk.get('events')!.size).toBe(0);
+    fixture.fail(null);
+    expect(await saveSession([roundEvent(1)], roundMeta(1))).toBe('persistent');
+    expect(fixture.disk.get('sessions')!.get(meta.session)).toEqual(original);
+    expect(fixture.disk.get('events')!.get(meta.session)!.events).toEqual([event]);
+    expect(await loadSessions()).toEqual([original, roundMeta(1)]);
+  });
+
   it.each(['abort', 'error', 'put'])('reports memory retention after a transaction %s', async failure => {
     const { db, transaction, puts } = databaseFixture();
     if (failure === 'put') puts.get('sessions')!.mockImplementation(() => { throw new Error('synthetic write failure'); });

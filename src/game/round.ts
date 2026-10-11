@@ -181,7 +181,7 @@ export class Round {
 
   /** Explicit practice finish also preserves the frozen clock while paused. */
   finish(t: number): void {
-    if ((this.mode === 'passage' || this.mode === 'journey') && this.started && !this.finished) this.endT = this.pausedAt ?? t;
+    if (!this.finished && (this.mode === 'patch' || ((this.mode === 'passage' || this.mode === 'journey') && this.started))) this.endT = this.pausedAt ?? t;
   }
 
   accuracy(): number { return this.correct + this.misses ? this.correct / (this.correct + this.misses) : 1; }

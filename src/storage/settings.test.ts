@@ -26,6 +26,17 @@ const schemas = [
 ];
 
 describe('validated settings and preservation', () => {
+  it('refreshes another tab\'s validated value while keeping failed writes available in page memory', () => {
+    const f = fixture(); f.store.get('volume', 1, isVolume); f.store.set('volume', .4);
+    f.data.set('icebreaker.volume', '0.7');
+    expect(f.store.get('volume', 1, isVolume)).toBe(.4);
+    expect(f.store.refresh('volume', 1, isVolume)).toBe(.7);
+    f.failWrites(true); f.store.set('volume', .2); f.failReads(true);
+    expect(f.store.refresh('volume', 1, isVolume)).toBe(.2);
+    f.failReads(false); f.data.set('icebreaker.volume', '{broken');
+    expect(f.store.refresh('volume', 1, isVolume)).toBe(.2);
+    expect(f.data.get('icebreaker.volume')).toBe('{broken');
+  });
   it.each(schemas)('rejects invalid $key values and accepts its schema', ({ validate, invalid, valid }) => {
     for (const value of invalid) expect(validate(value)).toBe(false);
     for (const value of valid) expect(validate(value)).toBe(true);

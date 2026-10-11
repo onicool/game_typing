@@ -12,16 +12,21 @@ export const isCharacter = (v: unknown): v is Character => v === 'elna' || v ===
 
 export interface Place {
   key: string; name: string; sub: string; art: string; landmark: string; words: Word[];
+  intro?: string; outro?: string;
 }
 const words = (pairs: [string, string][]): Word[] => pairs.map(([display, reading]) => ({ display, reading }));
 /** Source: concept/WORLD_AND_CHARACTERS.md at 31a75f3. Route words are original
  * practice content; they do not settle the proposed boss fights or ending. */
 export const PLACES: Place[] = [
-  { key: 'heaven', name: '暁の天界', sub: '出立の門', art: 'stage-01-heaven', landmark: '光の封印', words: words([
+  { key: 'heaven', name: '暁の天界', sub: '出立の門', art: 'stage-01-heaven', landmark: '光の封印',
+    intro: '雲海の向こうに待つ人へ、祈りを唱えて出立の門をひらこう。',
+    outro: '五つの祈りが門をひらいた。慣れ親しんだ空から、下界へ。', words: words([
     ['空の向こうへ', 'そらのむこうへ'], ['翼を広げる', 'つばさをひろげる'], ['光の道', 'ひかりのみち'],
     ['朝を待つ', 'あさをまつ'], ['祈りを届ける', 'いのりをとどける'],
   ]) },
-  { key: 'town', name: '風車の町', sub: '晴れ渡る広場', art: 'stage-02-windmill-town', landmark: '広場の結界', words: words([
+  { key: 'town', name: '風車の町', sub: '晴れ渡る広場', art: 'stage-02-windmill-town', landmark: '広場の結界',
+    intro: '風車の下には人々の暮らしがある。広場へ祈りを届けよう。',
+    outro: '広場へ続く道がひらいた。今度は、人々の声を聞きに行こう。', words: words([
     ['風に乗る', 'かぜにのる'], ['広場の笑顔', 'ひろばのえがお'], ['約束を守る', 'やくそくをまもる'],
     ['町に光を', 'まちにひかりを'], ['一緒に歩こう', 'いっしょにあるこう'],
   ]) },
