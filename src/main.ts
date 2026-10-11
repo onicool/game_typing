@@ -6,6 +6,7 @@ import { TypingSession, normalizeReading } from './engine/romaji';
 import { Audio } from './fx/audio';
 import { Music, MUSIC_TRACKS } from './fx/music';
 import { DialogFocus } from './ui/dialog';
+import { renderTitle } from './ui/title';
 import { renderReport } from './ui/report';
 import { loadEvents, loadSessions, saveSession, type SessionMeta } from './stats/store';
 import { analyze } from './stats/analyze';
@@ -55,7 +56,7 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const compactChapter = matchMedia('(max-width: 620px), (max-height: 650px)');
 let motion = settings.get('effects.motion', reducedMotion.matches ? 0 : 1, isEffectLevel);
 let lowGraphics = settings.get('graphics.low', false, isBoolean);
-let view: 'characters' | 'journey' | 'training' | 'records' | 'memories' | 'lesson' | 'battle' | 'result' = 'characters';
+let view: 'title' | 'characters' | 'journey' | 'training' | 'records' | 'memories' | 'lesson' | 'battle' | 'result' = 'title';
 let round: Round | null = null;
 type Run = { dict: Dictionary; mode: NonNullable<RoundOptions['mode']>; place: number; character: typeof character; focus?: string; vulns?: Vuln[];
   difficulty?: typeof difficulty; bossOnly?: boolean; parentSession?: string; initialKanaPerSec?: number; seed?: number;
@@ -143,6 +144,7 @@ function showModal(id: typeof modal) {
   dialogs.show(id ? $(id) : null, origin);
 }
 function updateNav() {
+  app.classList.toggle('av-at-title', view === 'title');
   app.classList.toggle('av-playing-duel', view === 'battle' && !!run?.combatTrial);
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-view]')) {
     button.disabled = view === 'battle' || (view === 'result' && performance.now() < resultReadyAt);
@@ -161,7 +163,9 @@ function changeView(next: typeof view) {
   if (next !== 'battle') main.querySelector<HTMLElement>('h1,h2')?.focus({ preventScroll: true });
 }
 function render() {
-  if (view === 'characters') {
+  if (view === 'title') {
+    main.innerHTML = renderTitle();
+  } else if (view === 'characters') {
     main.innerHTML = `<section class="av-page av-character-page"><div class="av-heading"><p class="av-eyebrow">空と祈り</p><h1 tabindex="-1">誰と旅に出る？</h1><p>言葉を唱えて、下界への道をひらこう。</p></div><div class="av-choice-grid">${Object.entries(CHARACTERS).map(([key, p]) => `<button type="button" class="av-choice" data-person="${key}" aria-pressed="${character === key}">${picture(`player-${key}`, p.name)}<div class="av-choice-copy"><strong>${p.name}</strong><p>${p.role}<br>「${p.quote}」</p></div></button>`).join('')}</div><div class="av-page-footer"><span>${CHARACTERS[character].name}を選択中</span>${action('横視点バトルを遊ぶ', 'combat-practice', 'primary')}${action('この天使で旅に出る', 'map')}${action('教養の短文を打つ', 'knowledge')}</div></section>`;
   } else if (view === 'journey') {
     refreshProgress();
@@ -728,7 +732,12 @@ function openSettings() {
 function closeSettings() { showModal(view === 'battle' && round?.paused ? 'pause-dialog' : null); }
 function perform(name: string) {
   if (finale || (view === 'result' && performance.now() < resultReadyAt)) return;
-  if (name === 'map') { round = null; changeView('journey'); }
+  if (name === 'title') { round = null; changeView('title'); }
+  else if (name === 'title-start' && view === 'title') {
+    character = 'elna'; settings.set('angel.character', character);
+    perform('combat-practice');
+  }
+  else if (name === 'map') { round = null; changeView('journey'); }
   else if (name === 'memories') changeView('memories');
   else if (name === 'training') changeView('training');
   else if (name === 'records') { recordDict = DICTIONARIES[dictIndex]; changeView('records'); }
@@ -840,6 +849,10 @@ window.addEventListener('keydown', event => {
     return;
   }
   if (event.repeat) return;
+  if (view === 'title') {
+    if (event.code === 'Space' || event.key === ' ') { event.preventDefault(); perform('title-start'); }
+    return;
+  }
   if (view === 'lesson') { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); perform('study-start'); } else if (event.key === 'Escape') perform('map'); return; }
   if (view === 'records') { if (/^[1-8]$/.test(event.key)) patch(Number(event.key) - 1); else if (event.key.toLowerCase() === 'h') perform('metric'); else if (event.key === 'Escape') perform('map'); return; }
   if (view === 'result') { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); perform(main.querySelector<HTMLButtonElement>('.av-page-footer .primary')?.dataset.action ?? 'retry'); } else if (event.key === 'Escape') perform('map'); return; }
@@ -926,4 +939,4 @@ function frame(now: number) {
   }
   lastFrame = now; requestAnimationFrame(frame);
 }
-renderSound(); render(); updateNav(); requestAnimationFrame(frame);
+renderSound(); render(); updateNav(); main.querySelector<HTMLElement>('#title-name')?.focus({ preventScroll: true }); requestAnimationFrame(frame);

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
-from browser_support import launch_chromium
+from browser_support import launch_chromium, enter_characters
 
 URL, destination = sys.argv[1:3]
 assert urlparse(URL).hostname in ('localhost', '127.0.0.1')
@@ -76,7 +76,7 @@ with sync_playwright() as p:
         c.add_init_script(INIT + (f'Math.random=()=>{seed}/4294967296;' if seed is not None else ''))
         page=c.new_page();page.set_default_timeout(6000)
         page.on('pageerror',lambda e:ERRORS.append(str(e)))
-        page.goto(URL)
+        page.goto(URL); enter_characters(page)
         return c,page
 
     # Discover all four actual paragraphs using finite deterministic seeds, no app hooks.
@@ -117,7 +117,7 @@ with sync_playwright() as p:
         assert page.locator(f'[data-place="{place}"]').get_attribute('aria-pressed')=='true'
         if place:
             before=json.dumps(audit(page),sort_keys=True,ensure_ascii=False)
-            page.reload();assert page.locator('[data-person=towa]').get_attribute('aria-pressed')=='true'
+            page.reload(); enter_characters(page);assert page.locator('[data-person=towa]').get_attribute('aria-pressed')=='true'
             action(page,'map');assert page.locator(f'[data-place="{place}"]').get_attribute('aria-pressed')=='true'
             assert json.dumps(audit(page),sort_keys=True,ensure_ascii=False)==before
         action(page,'start-journey');keys=[]
@@ -158,7 +158,7 @@ with sync_playwright() as p:
     assert ''.join(e['key'] for e in events)==prefix and events[0]['dt']!=events[0]['dt']
     assert page.locator('#angel-main [data-action=next-place]').count()==0
     action(page,'run-records');page.wait_for_selector('#report[aria-busy=false]')
-    page.reload();assert json.dumps(audit(page),sort_keys=True,ensure_ascii=False)==json.dumps(after,sort_keys=True,ensure_ascii=False)
+    page.reload(); enter_characters(page);assert json.dumps(audit(page),sort_keys=True,ensure_ascii=False)==json.dumps(after,sort_keys=True,ensure_ascii=False)
     CASES.append({'case':'empty-retry-map-nested-settings-preserve-input-partial-save-and-history','passed':True,'sessions':8})
     c.close()
 

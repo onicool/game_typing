@@ -1,0 +1,95 @@
+#angel-ui-studio .av-at-title .av-chrome { display:none; }
+#angel-ui-studio .av-title {
+  position:relative; isolation:isolate; overflow:hidden; min-height:100svh;
+  display:grid; grid-template-rows:auto auto minmax(180px,1fr) auto;
+  color:#fff6e7; background:#102439;
+}
+#angel-ui-studio .av-title-backdrop {
+  position:absolute; inset:0; z-index:-2; background-size:cover;
+  background-position:center 56%; opacity:.76;
+}
+#angel-ui-studio .av-title::before {
+  content:""; position:absolute; inset:0; z-index:-1;
+  background:linear-gradient(180deg,#0b21399e 0%,#10243a25 36%,#13283b12 54%,#0a1b30d9 78%,#081a2e 100%);
+}
+#angel-ui-studio .av-title-top {
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:24px 32px; color:#e9edf2; font-size:10px; letter-spacing:.2em;
+}
+#angel-ui-studio .av-title-top i { font-style:normal; color:#d8bd80; margin:0 8px; }
+#angel-ui-studio .av-title-settings {
+  border:1px solid #d0dbe451; background:#0c233969; border-radius:4px;
+  min-height:40px; padding:8px 16px; font-size:12px; letter-spacing:.1em; cursor:pointer;
+}
+#angel-ui-studio .av-title-copy { position:relative; z-index:1; text-align:center; padding:6px 24px 0; }
+#angel-ui-studio .av-title-reading { font-size:13px; letter-spacing:.55em; padding-left:.55em; margin:0 0 7px; color:#f2debd; }
+#angel-ui-studio .av-title h1 {
+  font-family:"Yu Mincho","Hiragino Mincho ProN",serif; font-weight:600;
+  font-size:clamp(68px,10vw,124px); line-height:1.15; letter-spacing:.16em; padding-left:.16em;
+  margin:0; text-shadow:0 3px 30px #07172ca6,0 1px 0 #8f743c;
+}
+#angel-ui-studio .av-title h1:focus { outline:none; }
+#angel-ui-studio .av-title-tagline { font-family:"Yu Mincho",serif; font-size:15px; letter-spacing:.18em; margin:18px 0 0; text-shadow:0 1px 9px #091b32; }
+#angel-ui-studio .av-title-stage { position:relative; width:min(1100px,100%); min-height:180px; margin:0 auto; }
+#angel-ui-studio .av-title-actor {
+  position:absolute; bottom:0; width:clamp(180px,35vw,380px); max-height:100%;
+  display:flex; flex-direction:column; align-items:center;
+}
+#angel-ui-studio .av-title-elna { left:7%; }
+#angel-ui-studio .av-title-sentinel { right:6%; }
+#angel-ui-studio .av-title-actor::before { content:""; position:absolute; bottom:25px; width:55%; height:12px; border-radius:50%; background:#06162b7a; filter:blur(7px); z-index:-1; }
+#angel-ui-studio .av-title-actor img { display:block; width:100%; height:auto; max-height:calc(100svh - 380px); min-height:150px; object-fit:contain; filter:drop-shadow(0 8px 12px #05192e75); }
+#angel-ui-studio .av-title-actor span { font-size:11px; letter-spacing:.18em; margin-top:5px; padding:4px 18px; border-radius:20px; background:#0b213aa6; color:#e4e9ef; }
+#angel-ui-studio .av-title-versus { position:absolute; left:50%; bottom:42%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:15px; color:#efd4a0; }
+#angel-ui-studio .av-title-versus span { font-size:21px; text-shadow:0 0 20px #efdaab; }
+#angel-ui-studio .av-title-versus i { width:1px; height:40px; background:linear-gradient(#e7c995a6,transparent); }
+#angel-ui-studio .av-title-entry { z-index:1; text-align:center; padding:20px 24px 24px; }
+#angel-ui-studio .av-title-start {
+  display:inline-flex; align-items:center; justify-content:center; gap:14px; min-height:64px; min-width:320px;
+  border:1px solid #e9d6ad; border-radius:5px; padding:12px 26px; cursor:pointer;
+  background:linear-gradient(135deg,#f1dfb7,#dac08c); color:#17293c;
+  box-shadow:0 5px 24px #050e263d; transition:transform .16s,filter .16s;
+}
+#angel-ui-studio .av-title-start kbd { font:600 17px "Avenir Next",sans-serif; letter-spacing:.16em; padding:5px 11px; border:1px solid #43506370; border-bottom-width:3px; border-radius:4px; }
+#angel-ui-studio .av-title-start>span { font-size:16px; font-weight:600; }
+#angel-ui-studio .av-title-start>i { font-style:normal; font-size:21px; margin-left:12px; }
+#angel-ui-studio .av-title-start:hover { filter:brightness(1.08); transform:translateY(-2px); }
+#angel-ui-studio .av-title-start-note { margin:12px 0 17px; color:#e0dfdc; font-size:12px; letter-spacing:.08em; }
+#angel-ui-studio .av-title-menu { display:flex; justify-content:center; flex-wrap:wrap; gap:4px 20px; }
+#angel-ui-studio .av-title-menu button { border:0; background:transparent; color:#dbe3ec; font-size:12px; min-height:36px; padding:8px 5px; cursor:pointer; }
+#angel-ui-studio .av-title-menu button:hover { color:#f0d6a4; }
+#angel-ui-studio .av-title button:focus-visible { outline:2px solid #a7edff; outline-offset:5px; }
+#angel-ui-studio .av-title-help { color:#aabed1; font-size:10px; letter-spacing:.04em; margin:12px 0 0; }
+#angel-ui-studio .av-title-help span { margin:0 9px; }
+@media(min-width:850px) and (min-height:800px) {
+  #angel-ui-studio .av-title-copy { padding-top:35px; }
+  #angel-ui-studio .av-title-entry { padding-bottom:38px; }
+}
+@media(max-width:620px) {
+  #angel-ui-studio .av-title-top { padding:16px; font-size:8px; letter-spacing:.12em; }
+  #angel-ui-studio .av-title-top i { margin:0 4px; }
+  #angel-ui-studio .av-title-settings { padding:8px 11px; font-size:11px; }
+  #angel-ui-studio .av-title-copy { padding-top:18px; }
+  #angel-ui-studio .av-title-tagline { font-size:13px; margin-top:14px; }
+  #angel-ui-studio .av-title-actor { width:49%; }
+  #angel-ui-studio .av-title-elna { left:0; }
+  #angel-ui-studio .av-title-sentinel { right:0; }
+  #angel-ui-studio .av-title-entry { padding:18px 16px 22px; }
+  #angel-ui-studio .av-title-start { min-width:0; width:min(320px,100%); gap:10px; padding:12px 18px; min-height:58px; }
+  #angel-ui-studio .av-title-menu { gap:2px 16px; }
+}
+@media(max-height:650px) and (min-width:621px) {
+  #angel-ui-studio .av-title-top { padding:12px 24px; }
+  #angel-ui-studio .av-title h1 { font-size:76px; }
+  #angel-ui-studio .av-title-tagline { margin-top:10px; font-size:13px; }
+  #angel-ui-studio .av-title-actor { width:250px; }
+  #angel-ui-studio .av-title-actor img { max-height:230px; }
+  #angel-ui-studio .av-title-entry { padding-top:12px; padding-bottom:14px; }
+  #angel-ui-studio .av-title-start { min-height:50px; padding:8px 20px; }
+  #angel-ui-studio .av-title-start-note { margin:8px 0; }
+  #angel-ui-studio .av-title-help { margin-top:4px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  #angel-ui-studio .av-title-start { transition:none; }
+  #angel-ui-studio .av-title-start:hover { transform:none; }
+}

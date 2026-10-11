@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
-from browser_support import launch_chromium
+from browser_support import launch_chromium, enter_characters
 
 URL, destination = sys.argv[1:3]
 assert urlparse(URL).hostname in ('localhost', '127.0.0.1')
@@ -69,7 +69,7 @@ with sync_playwright() as p:
         if virtual:
             page.clock.install(time=0)
             page.clock.pause_at(1000)
-        page.goto(URL)
+        page.goto(URL); enter_characters(page)
         if long:
             page.locator('[data-view="training"]').click()
         action(page, 'combat-long' if long else 'combat-practice')

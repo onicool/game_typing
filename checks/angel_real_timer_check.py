@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
-from browser_support import launch_chromium
+from browser_support import launch_chromium, enter_characters
 
 URL, destination = sys.argv[1:3]
 assert urlparse(URL).hostname in ('localhost', '127.0.0.1')
@@ -21,7 +21,7 @@ with sync_playwright() as p:
       window.addEventListener('keydown',e=>{if(e.isTrusted&&e.key.length===1&&e.target.id==='input-panel')qaFirstKey??=e.timeStamp;},true);
       new MutationObserver(()=>{if(document.getElementById('session-save-state'))qaResultAt??=performance.now();}).observe(document,{childList:true,subtree:true});''')
     page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-    page.goto(URL);page.locator('[data-view=training]').click();page.locator('#training-dict').select_option('0')
+    page.goto(URL); enter_characters(page);page.locator('[data-view=training]').click();page.locator('#training-dict').select_option('0')
     page.locator('[data-action=start-training]').click();keys=[]
     for _ in range(4):
         text=page.locator('#romaji').inner_text();keys.extend(text);page.keyboard.type(text,delay=5)

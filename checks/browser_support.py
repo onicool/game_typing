@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 
-def launch_chromium(playwright):
+def launch_chromium(playwright, *, headless=True):
     executable = os.environ.get('CHROMIUM_EXECUTABLE')
     if executable and not Path(executable).is_file():
         raise FileNotFoundError(f'CHROMIUM_EXECUTABLE does not exist: {executable}')
@@ -15,10 +15,16 @@ def launch_chromium(playwright):
             executable = str(chrome)
     if not executable:
         executable = shutil.which('chromium') or shutil.which('chromium-browser')
-    options = {'headless': True}
+    options = {'headless': headless}
     if executable:
         options['executable_path'] = executable
     # Existing Linux QA containers run as root; Mac retains normal sandboxing.
     if sys.platform.startswith('linux') and os.geteuid() == 0:
         options['args'] = ['--no-sandbox']
     return playwright.chromium.launch(**options)
+
+
+def enter_characters(page):
+    """Older gameplay checks begin by choosing a character from the title menu."""
+    if page.locator('#title-start').count():
+        page.locator('.av-title-menu [data-view="characters"]').click()

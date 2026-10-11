@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
-from browser_support import launch_chromium
+from browser_support import launch_chromium, enter_characters
 
 URL, destination = sys.argv[1:3]
 assert urlparse(URL).hostname in ('localhost', '127.0.0.1')
@@ -140,7 +140,7 @@ with sync_playwright() as p:
             c.route('**/angel/*.webp', lambda route: route.abort())
         page = c.new_page(); page.set_default_timeout(6000)
         page.on('pageerror', lambda e: ERRORS.append(str(e)))
-        page.goto(URL); page.evaluate(SEED)
+        page.goto(URL); enter_characters(page); page.evaluate(SEED)
         return c, page
 
     # All seven places, both characters, exact source-order previews and persistence.
@@ -175,7 +175,7 @@ with sync_playwright() as p:
     before = audit(page)
     assert canonical(next(r for r in before['events'] if r['session'] == 'qa-preserved')) == canonical(original['events'][0])
     assert next(s for s in before['sessions'] if s['session'] == 'qa-preserved') == original['sessions'][0]
-    page.reload(); assert canonical(audit(page)) == canonical(before)
+    page.reload(); enter_characters(page); assert canonical(audit(page)) == canonical(before)
     assert page.locator('[data-person=elna]').get_attribute('aria-pressed') == 'true'
     page.locator('[data-view=records]').click(); page.locator('#record-dict').select_option('jp-angel-city')
     page.wait_for_selector('#report[aria-busy=false]')
@@ -231,7 +231,7 @@ with sync_playwright() as p:
     page.evaluate('qaReadBlocked=false'); page.locator('[data-view=journey]').click(); page.locator('[data-view=records]').click()
     page.locator('#record-dict').select_option('jp-angel-heaven'); page.wait_for_selector('#report[aria-busy=false]')
     assert '保存領域の一部' not in page.locator('#report').inner_text()
-    page.reload(); assert canonical(audit(page)) == canonical(recovered)
+    page.reload(); enter_characters(page); assert canonical(audit(page)) == canonical(recovered)
     CASES.append({'case': 'native-write-outage-read-partial-recovery-and-reload', 'passed': True})
     c.close()
 
@@ -306,7 +306,7 @@ with sync_playwright() as p:
     assert page.locator('#sound-volume').input_value()=='0.95'
     page.keyboard.press('Escape'); map_start(page); partial(page)
     preserved=page.evaluate('(keys)=>Object.fromEntries(keys.map(k=>[k,localStorage.getItem(k)]))',list(bad))
-    assert preserved==bad; page.reload()
+    assert preserved==bad; page.reload(); enter_characters(page)
     assert page.evaluate('(keys)=>Object.fromEntries(keys.map(k=>[k,localStorage.getItem(k)]))',list(bad))==bad
     CASES.append({'case':'malformed-settings-original-bytes-and-native-slider-preserved','passed':True})
     c.close()
