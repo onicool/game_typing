@@ -22,13 +22,14 @@ export function warmBattleSprites(character: 'elna' | 'towa') {
 export class SpriteActor {
   private image: SVGImageElement;
   private film: SVGElement;
+  private cell: SVGElement;
   private poster: SVGImageElement;
   private signature = '';
   constructor(private host: SVGElement, private actor: 'elna' | 'towa' | 'sentinel', x: number) {
     host.innerHTML = `<image class="side-sprite" href="${battleArt(`${actor}-idle.webp`)}" x="${x}" y="0" width="260" height="247"/>
-      <svg class="side-film" x="${x}" y="0" width="260" height="247" viewBox="0 0 512 512" overflow="hidden" opacity="0"><image class="side-atlas" width="1536" height="1024"/></svg>`;
+      <svg class="side-film" x="${x}" y="10" width="260" height="247" viewBox="-24 -24 560 560" overflow="hidden" opacity="0"><svg class="side-frame-cell" width="512" height="512" overflow="hidden"><image class="side-atlas" width="1536" height="1024"/></svg></svg>`;
     this.poster = host.querySelector('.side-sprite')!;
-    this.film = host.querySelector('.side-film')!; this.image = host.querySelector('.side-atlas')!;
+    this.film = host.querySelector('.side-film')!; this.cell = host.querySelector('.side-frame-cell')!; this.image = host.querySelector('.side-atlas')!;
   }
   paint(sample: MotionSample | null, guarding = false, posterOnly = false) {
     const move = sample?.move ?? (guarding ? 'guard' : this.actor === 'sentinel' ? 'hit' : this.actor === 'elna' ? 'thrust' : 'jab');
@@ -45,8 +46,10 @@ export class SpriteActor {
     if (signature !== this.signature) {
       this.signature = signature;
       this.image.setAttribute('href', battleArt(`motion/${name}.webp`));
-      this.image.setAttribute('x', String(-(frame % 3) * 512 + registration.x));
-      this.image.setAttribute('y', String(-Math.floor(frame / 3) * 512 + registration.y));
+      // Clip the source cell before registering it. Neighbouring poses cannot
+      // leak into the stage when a planted boot needs a horizontal correction.
+      this.cell.setAttribute('viewBox', `${(frame % 3) * 512} ${Math.floor(frame / 3) * 512} 512 512`);
+      this.cell.setAttribute('x', String(registration.x)); this.cell.setAttribute('y', String(registration.y));
     }
     this.host.dataset.motion = move; this.host.dataset.frame = String(frame);
     this.host.dataset.phase = sample?.phase ?? 'ready';

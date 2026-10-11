@@ -1,7 +1,8 @@
 import type { BattleEvent, BattleSnapshot } from '../game/battle';
 import type { CombatHit, CombatOptions } from './combat';
-import { BattleMotion } from './battle-motion';
+import { BattleMotion, PLAYER_MOVES } from './battle-motion';
 import { SpriteActor, warmBattleSprites } from './sprite-actor';
+import { PaintedEffect, warmPaintedEffects } from './painted-effect';
 import { KeyEffects, KEY_EFFECT_MS, KEY_EFFECT_SLOTS, type KeyAction } from './key-effects';
 
 const asset = (name: string) => `${import.meta.env.BASE_URL}fx/kenney/${name}.png`;
@@ -23,10 +24,15 @@ export class SideCombatScene {
   private playerActor: SpriteActor;
   private enemyActor: SpriteActor;
   private body: BattleMotion;
+  private weaponTrail: PaintedEffect;
+  private contactEffect: PaintedEffect;
+  private enemyTrail: PaintedEffect;
+  private enemyShadow: SVGElement;
+  private warmGeneration = 0;
   private shield: SVGElement;
   private warning: SVGElement;
   private projectiles: SVGElement[];
-  private nodes: { host: SVGElement; trail: SVGElement; slash: SVGElement; incoming: SVGElement; reflected: SVGElement; glint: SVGElement; sparks: SVGElement; cut: SVGElement; id: number; visible: boolean }[];
+  private nodes: { host: SVGElement; trail: SVGElement; slash: SVGElement; incoming: SVGElement; reflected: SVGElement; glint: SVGElement; sparks: SVGElement; cut: SVGElement; painted: PaintedEffect; id: number; visible: boolean }[];
   private outcome: SVGElement;
   private outcomeText: SVGElement;
   private effects = new KeyEffects();
@@ -48,11 +54,11 @@ export class SideCombatScene {
     host.classList.add('av-side-combat');
     host.style.setProperty('--battle-landscape', `url("${import.meta.env.BASE_URL}battle-art/celestial-terrace.webp")`);
     host.dataset.character = character;
-    this.body = new BattleMotion(character, character === 'elna' ? 2 : 4);
+    this.body = new BattleMotion(character);
     if (options) this.options = options;
     host.innerHTML = `<div class="side-captions"><span class="side-mode">攻撃 · 1文字で1斬撃</span><span class="side-count">斬撃 0 ／ 反射 0</span></div>
       <svg class="side-vector" viewBox="0 0 800 260" aria-hidden="true">
-      <ellipse cx="175" cy="235" rx="62" ry="5" fill="#1a2c43" opacity=".24"/><ellipse cx="650" cy="235" rx="65" ry="5" fill="#1a2c43" opacity=".24"/>
+      <ellipse cx="175" cy="235" rx="62" ry="5" fill="#1a2c43" opacity=".24"/><ellipse class="side-enemy-shadow" cx="650" cy="235" rx="65" ry="5" fill="#1a2c43" opacity=".24"/>
       <g class="side-player" data-pose="idle"></g>
       <g class="side-enemy" data-pose="idle"></g>
       <g class="side-weapon" opacity="0"><path d="M247 90Q273 112 277 133" fill="none" stroke="#d1f7ff" stroke-width="2"/><path d="M253 105Q269 114 277 125" fill="none" stroke="#fff4cd" stroke-width="2"/></g>
@@ -70,24 +76,35 @@ export class SideCombatScene {
     this.player = find('player'); this.weapon = find('weapon'); this.enemy = find('enemy'); this.shield = find('shield'); this.warning = find('warning');
     this.playerActor = new SpriteActor(this.player, character, 22);
     this.enemyActor = new SpriteActor(this.enemy, 'sentinel', 482);
+    this.weapon.querySelectorAll('path').forEach(path => path.setAttribute('opacity', '0'));
+    this.enemyShadow = find('enemy-shadow');
+    this.weaponTrail = new PaintedEffect(this.weapon, -5, -30, 175, 120);
+    this.contactEffect = new PaintedEffect(this.shield, -45, 85, 95);
+    this.enemyTrail = new PaintedEffect(this.svg, 420, 75, 160, 120);
     this.outcome = find('outcome'); this.outcomeText = find('outcome-text');
     this.projectiles = [...this.svg.querySelectorAll<SVGElement>('.side-threat')];
     this.nodes = [...this.svg.querySelectorAll<SVGElement>('.side-key-effect')].map(host => {
       const part = (cls: string) => host.querySelector<SVGElement>(`.side-${cls}`)!;
-      return { host, trail: part('trail'), slash: part('slash'), incoming: part('incoming'), reflected: part('reflected'), glint: part('glint'), sparks: part('sparks'), cut: part('cut'), id: 0, visible: false };
+      return { host, trail: part('trail'), slash: part('slash'), incoming: part('incoming'), reflected: part('reflected'), glint: part('glint'), sparks: part('sparks'), cut: part('cut'), painted: new PaintedEffect(host, -55, -55, 110), id: 0, visible: false };
     });
     this.mode = host.querySelector('.side-mode')!; this.count = host.querySelector('.side-count')!;
     this.warmArt(); this.paint(0, false);
   }
   private warmArt() {
-    if (this.options.motion && !this.options.low) void warmBattleSprites(this.body.character).then(() => this.paint(this.lastTime, this.svg.dataset.mode === 'defend'));
+    const generation = ++this.warmGeneration;
+    this.svg.dataset.artReady = this.options.motion && !this.options.low ? 'loading' : 'static';
+    if (this.options.motion && !this.options.low) void Promise.all([warmBattleSprites(this.body.character), warmPaintedEffects(this.body.character)]).then(results => {
+      if (generation !== this.warmGeneration) return;
+      this.svg.dataset.artReady = results.flat().every(Boolean) ? 'ready' : 'fallback';
+      this.paint(this.lastTime, this.svg.dataset.mode === 'defend');
+    });
   }
   configure(options: CombatOptions) { this.options = options; this.effects.clearVisuals(); this.body.clear(); this.lastKeyAt = -Infinity; this.warmArt(); this.paint(this.lastTime, this.svg.dataset.mode === 'defend'); }
   setComboTier(_tier: number) { /* One action per key at every combo level. */ }
   hit(_kind: CombatHit) { /* Word and special cues must not create a second swing. */ }
   acceptedKey(action: KeyAction, gameMs: number, kind: CombatHit) {
     const cue = this.body.accepted(action, gameMs);
-    this.effects.emit(action, gameMs, kind !== 'key'); this.lastKeyAt = gameMs; this.lastAction = action;
+    this.effects.emit(action, gameMs, cue.combo || kind !== 'key', cue.variant); this.lastKeyAt = gameMs; this.lastAction = action;
     this.svg.dataset.accepted = String(this.effects.accepted);
     this.svg.dataset.attacks = String(this.effects.attacks); this.svg.dataset.deflections = String(this.effects.deflections);
     this.count.textContent = `斬撃 ${this.effects.attacks} ／ 反射 ${this.effects.deflections}`;
@@ -118,9 +135,27 @@ export class SideCombatScene {
     this.lastTime = gameMs;
     const moving = this.options.motion && !this.options.low, intensity = Math.min(.65, this.options.intensity);
     const age = gameMs - this.lastKeyAt, recent = age >= 0 && age < KEY_EFFECT_MS;
-    this.playerActor.paint(moving ? this.body.player.sample(gameMs) : null, defending, !moving);
-    this.enemyActor.paint(moving ? this.body.enemy.sample(gameMs) : null, false, !moving);
-    this.weapon.setAttribute('opacity', recent && this.lastAction === 'attack' ? String(.55 * intensity) : '0');
+    const playerMotion = moving ? this.body.player.sample(gameMs) : null, enemyMotion = moving ? this.body.enemy.sample(gameMs) : null;
+    this.playerActor.paint(playerMotion, defending, !moving);
+    this.enemyActor.paint(enemyMotion, false, !moving);
+    // The melee closes the gap while its drawn joints articulate. UI stays fixed.
+    const melee = enemyMotion?.kind === 'enemy' && enemyMotion.move === 'melee';
+    const dash = melee ? enemyMotion.frame === 1 ? -230 * Math.min(1, (enemyMotion.progress * 660 - 250) / 150) : enemyMotion.frame === 2 ? -230 : enemyMotion.frame === 3 ? -230 * Math.max(0, 1 - (enemyMotion.progress * 660 - 440) / 70) : 0 : 0;
+    if (dash) { this.enemy.setAttribute('transform', `translate(${dash} 0)`); this.enemyShadow.setAttribute('transform', `translate(${dash} 0)`); }
+    else { this.enemy.removeAttribute('transform'); this.enemyShadow.removeAttribute('transform'); }
+    const responseAge = gameMs - Math.max(this.lastAction === 'attack' ? this.lastKeyAt : -Infinity, this.contactAt);
+    const response = moving && responseAge >= 0 && responseAge < 90 ? Math.sin(responseAge / 90 * Math.PI * 3) * intensity * 2 : 0;
+    this.svg.style.transform = response ? `translateX(${response}px)` : '';
+    const strike = playerMotion && (playerMotion.kind === 'normal' || playerMotion.kind === 'combo');
+    this.weapon.setAttribute('opacity', strike ? '1' : '0');
+    this.weapon.setAttribute('transform', `translate(${this.body.character === 'elna' ? 270 : 245} 105)`);
+    const moves: readonly string[] = PLAYER_MOVES[this.body.character];
+    const variant = playerMotion ? Math.max(0, moves.indexOf(playerMotion.move)) : 0;
+    this.weaponTrail.host.setAttribute('width', playerMotion?.kind === 'combo' ? '235' : '175');
+    this.weaponTrail.host.setAttribute('height', playerMotion?.kind === 'combo' ? '155' : '120');
+    this.weaponTrail.paint(this.body.character, variant, playerMotion && playerMotion.frame >= 1 && playerMotion.frame <= 3 ? Math.min(.9, 1.6 * intensity) : 0, moving);
+    this.enemyTrail.paint('enemy', enemyMotion?.move === 'volley' ? 2 : enemyMotion?.move === 'melee' ? 1 : 0, enemyMotion?.kind === 'enemy' && enemyMotion.frame === 2 ? 1.2 * intensity : 0, moving);
+    this.enemyTrail.host.setAttribute('x', melee ? '220' : '420');
     this.svg.dataset.mode = defending ? 'defend' : 'attack';
     this.mode.textContent = defending ? '防御 · 1文字で1発を弾く' : '攻撃 · 1文字で1斬撃';
     if (this.duel) this.mode.textContent += ` · あと${Math.max(0, (this.duel.endsAt - gameMs) / 1000).toFixed(1)}秒${defending ? ` · 反撃あと${this.duel.remaining}回` : ''}`;
@@ -128,6 +163,8 @@ export class SideCombatScene {
     const contact = gameMs - this.contactAt < 650 ? this.contact : null;
     this.shield.setAttribute('opacity', defending || (recent && this.lastAction === 'defend') || contact ? '1' : '0');
     this.shield.dataset.contact = contact ?? 'ready';
+    this.contactEffect.host.setAttribute('x', '230');
+    this.contactEffect.paint('enemy', contact === 'parry' ? 4 : contact === 'impact' ? 5 : 3, contact ? .65 * intensity : 0, moving);
     const combo = gameMs - this.comboAt < 900 && this.comboAt >= this.contactAt;
     const result = combo ? 'combo' : contact;
     this.outcome.setAttribute('opacity', result ? '1' : '0');
@@ -136,7 +173,7 @@ export class SideCombatScene {
     for (let i = 0; i < this.projectiles.length; i++) {
       const projectile = this.projectiles[i];
       const remaining = this.duel?.remaining ?? 4;
-      projectile.setAttribute('opacity', defending && i < remaining ? i === 0 ? '.9' : '.35' : '0');
+      projectile.setAttribute('opacity', defending && i < remaining && !(i === 0 && melee) ? i === 0 ? '.9' : '.35' : '0');
       const progress = this.duel ? i === 0 && moving ? Math.max(0, Math.min(1, 1 - (this.duel.nextAt - gameMs) / this.duel.interval)) : 0
         : moving ? ((gameMs % 1300) / 1300 + i / 4) % 1 : i / 4;
       projectile.setAttribute('transform', `translate(${535 - progress * 255 + (i ? i * 20 : 0)} ${130 + Math.sin(i * 2) * 18}) rotate(180)`);
@@ -173,6 +210,7 @@ export class SideCombatScene {
       node.glint.setAttribute('transform', `scale(${.8 + progress * .6})`);
       node.sparks.setAttribute('transform', `rotate(${effect.id * 47 % 360}) scale(${.7 + progress * 1.1})`);
       node.cut.setAttribute('opacity', attack && !this.options.low && latest ? '.16' : '0');
+      node.painted.paint(attack ? this.body.character : 'enemy', attack ? effect.variant ?? 0 : 3, latest ? Math.min(.9, 1.4 * intensity) : .2 * intensity, moving);
     }
     const text = combo ? 'コンボ完成！ 最後の文字までつながった' : contact === 'impact' ? '被弾 · そのまま入力を続けよう' : contact === 'parry' ? this.duel ? 'パリィ完成！ 被弾分のガードも回復' : 'パリィ完成！ 弾き返し' : contact === 'guard' ? '部分ガード · 入力した分で1発を防いだ' : defending ? '敵の弾を1文字ずつ反射。金の枠の言葉を完成させよう' : '正しい1文字ごとに光の一撃を、守護機へ';
     if (text !== this.lastLabel) { this.label.textContent = text; this.lastLabel = text; }

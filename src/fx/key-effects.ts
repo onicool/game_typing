@@ -1,7 +1,7 @@
 export type KeyAction = 'attack' | 'defend';
 export const KEY_EFFECT_MS = 240;
 export const KEY_EFFECT_SLOTS = 64;
-export interface KeyEffect { id: number; action: KeyAction; at: number; strong: boolean }
+export interface KeyEffect { id: number; action: KeyAction; at: number; strong: boolean; variant?: number }
 
 /** Immediate, overlapping feedback. Never queue work for a later frame.
  * Even a burst larger than the pool updates all counters; only the oldest
@@ -11,8 +11,8 @@ export class KeyEffects {
   accepted = 0;
   attacks = 0;
   deflections = 0;
-  emit(action: KeyAction, at: number, strong = false): KeyEffect {
-    const effect = { id: ++this.accepted, action, at, strong };
+  emit(action: KeyAction, at: number, strong = false, variant?: number): KeyEffect {
+    const effect: KeyEffect = { id: ++this.accepted, action, at, strong, ...(variant === undefined ? {} : { variant }) };
     if (action === 'attack') this.attacks++; else this.deflections++;
     this.slots[(effect.id - 1) % KEY_EFFECT_SLOTS] = effect;
     return effect;

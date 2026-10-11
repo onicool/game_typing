@@ -401,7 +401,7 @@ function battleEvents(events: BattleEvent[], now: number) {
   combat?.feedback(events, round.elapsedMs(now));
   const firstChapter = chapter.definition.key === 'heaven';
   for (const e of events) {
-    if (e.type === 'chip') { if (!e.guarded) audio.miss(); $('battle-feedback').textContent = e.guarded ? '部分ガード · 入力した分で1発を防いだ' : `小さな被弾 −${e.amount} · そのまま入力を続けよう`; }
+    if (e.type === 'chip') { audio.combatCue(e.guarded ? 'guard' : 'impact'); $('battle-feedback').textContent = e.guarded ? '部分ガード · 入力した分で1発を防いだ' : `小さな被弾 −${e.amount} · そのまま入力を続けよう`; }
     else if (e.type === 'combo') { scoring.score += 120; audio.word(0); $('battle-feedback').textContent = e.clean ? 'コンボ完成！ 正確な入力で追加ボーナス' : 'コンボ完成！ 訂正しても最後まで届いた'; }
     else if (e.type === 'windup') { audio.battleCue('windup'); $('battle-feedback').textContent = e.marked.length === 2 ? '二語防御 · 金の枠を二つ唱える' : '予兆 · 金の枠の言葉で防御'; }
     else if (e.type === 'parry') { scoring.score += 200; audio.battleCue('parry'); $('battle-feedback').textContent = firstChapter ? '防御成功 · 弾き返し！' : '弾き返し！'; }

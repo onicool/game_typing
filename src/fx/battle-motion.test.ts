@@ -32,6 +32,13 @@ describe('body motion independent of key damage and the game clock', () => {
     motion.combo(1800); expect(motion.accepted('attack', 1800).variant).toBe(5);
     expect(motion.player.sample(2260)).toBeNull();
   });
+  it('consumes completion once even when several words share the same event clock', () => {
+    const motion = new BattleMotion('towa'); motion.combo(1000);
+    expect(motion.accepted('attack', 1000).combo).toBe(true);
+    motion.accepted('defend', 1000);
+    expect(motion.accepted('attack', 1000).combo).toBe(false);
+    expect(motion.combos).toBe(1);
+  });
   it('aligns all three enemy contacts with the announced packet and never duplicates a schedule', () => {
     const motion = new BattleMotion('towa');
     for (let i = 0; i < 3; i++) {

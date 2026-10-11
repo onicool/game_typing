@@ -58,6 +58,7 @@ export class BattleMotion {
   combo(now: number) { this.pendingComboAt = now; }
   accepted(action: KeyAction, now: number) {
     const combo = action === 'attack' && this.pendingComboAt === now;
+    if (combo) this.pendingComboAt = -Infinity;
     const variant = combo ? 4 + this.combos++ % 2 : action === 'attack' ? normalVariant(++this.attacks, this.variants) : 0;
     this.player.start(action === 'defend' ? 'guard' : PLAYER_MOVES[this.character][variant], now, combo ? 'combo' : action === 'defend' ? 'guard' : 'normal', true);
     if (action === 'attack') this.enemy.start('hit', now, 'hit', true);

@@ -34,6 +34,7 @@ npm run preview -- --host 127.0.0.1 --port 5180 --strictPort
 .venv/bin/python checks/angel_finish_check.py http://127.0.0.1:5180 /tmp/angel-finish-next
 .venv/bin/python checks/angel_real_timer_check.py http://127.0.0.1:5180 /tmp/angel-timer-next
 .venv/bin/python checks/side_combat_check.py http://127.0.0.1:5180 /tmp/side-combat-next
+.venv/bin/python checks/battle_motion_check.py http://127.0.0.1:5180 /tmp/battle-motion-next
 ```
 
 | 検証 | 対象 |
@@ -42,6 +43,7 @@ npm run preview -- --host 127.0.0.1 --port 5180 --strictPort
 | `angel_finish_check.py` | 4長文、5つの小画面サイズ、次の土地・最後の土地、設定・停止の往復と中断保存 |
 | `angel_real_timer_check.py` | 実時計での60秒計測、自動終了、キーイベントとメタ情報の保存 |
 | `side_combat_check.py` | 現在の横視点稽古。両キャラクターの透過画像読込・即時の攻防姿勢、短文・長文×5画面サイズ、100文字×3回の固定64枠・全打鍵保存、被弾の形・訂正後のパリィ、停止・仮想非表示時間、低負荷・演出オフ、独立BGMと7音源のブラウザ復号・ループ |
+| `battle_motion_check.py` | 両キャラの4通常攻撃＋2コンボ、全6コマと別の防御・パリィ、敵の3攻撃・被弾・反射、素材取得失敗と低負荷時の入力継続 |
 
 `stage1_combat_check.py` と `stage1_frame_cost_check.py` は以前の術式の描画構造を検査するための保存版です。
 横視点へ変わった現在の第1ステージには `side_combat_check.py` を使ってください。

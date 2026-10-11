@@ -81,6 +81,8 @@ with sync_playwright() as p:
             image.onerror=()=>no(new Error(src));image.src=src;
           })));
         }''')
+        if page.locator('.side-vector').get_attribute('data-art-ready') != 'static':
+            page.wait_for_function("document.querySelector('.side-vector').dataset.artReady==='ready'")
         return context, page
 
     for character in ('elna', 'towa'):
@@ -90,22 +92,22 @@ with sync_playwright() as p:
         art = page.locator('.side-sprite').evaluate_all('''images=>images.map(e=>({
           href:e.getAttribute('href'), opacity:e.getAttribute('opacity'),
           x:+e.getAttribute('x'), y:+e.getAttribute('y'), h:+e.getAttribute('height')}))''')
-        assert len(art) == 6 and sum(a['opacity'] == '1' for a in art) == 2
+        assert len(art) == 2 and sum(a['opacity'] == '0' for a in art) == 2
         assert all(a['y'] >= 0 and a['y'] + a['h'] <= 260 for a in art)
         page.keyboard.type(guide(page)[:1])
         assert state(page)['playerPose'] == 'attack' and state(page)['enemyPose'] == 'hit'
         page.screenshot(path=str(OUT/f'{character}-attack.png'))
-        page.clock.run_for(176)
+        page.clock.run_for(352)
         assert state(page)['playerPose'] == state(page)['enemyPose'] == 'idle'
-        page.keyboard.type(guide(page)); page.clock.run_for(176)
-        assert state(page)['playerPose'] == 'guard' and state(page)['enemyPose'] == 'attack'
+        page.keyboard.type(guide(page)); page.clock.run_for(500)
+        assert state(page)['playerPose'] == 'guard'
         page.screenshot(path=str(OUT/f'{character}-guard.png'))
         page.keyboard.type(guide(page))
         assert state(page)['result'] == 'parry' and state(page)['playerPose'] == 'guard'
         page.screenshot(path=str(OUT/f'{character}-parry.png'))
         assert page.locator('.side-player').get_attribute('transform') is None
         assert page.locator('.side-enemy').get_attribute('transform') is None
-        CASES.append({'case':character+'-loaded-illustrations-immediate-attack-guard-parry', 'images':len(art)})
+        CASES.append({'case':character+'-loaded-atlases-immediate-attack-guard-parry', 'posterImages':len(art)})
         c.close()
     print('Both illustrated characters and pose changes passed', flush=True)
 
