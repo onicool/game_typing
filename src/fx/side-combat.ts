@@ -1,5 +1,6 @@
 import type { BattleEvent, BattleSnapshot } from '../game/battle';
 import type { CombatHit, CombatOptions } from './combat';
+import { battleArt, combatPoses, playerPoses, sentinelPoses, type PlayerPose, type SentinelPose } from './battle-art';
 import { KeyEffects, KEY_EFFECT_MS, KEY_EFFECT_SLOTS, type KeyAction } from './key-effects';
 
 const asset = (name: string) => `${import.meta.env.BASE_URL}fx/kenney/${name}.png`;
@@ -18,6 +19,8 @@ export class SideCombatScene {
   private player: SVGElement;
   private weapon: SVGElement;
   private enemy: SVGElement;
+  private playerSprites: Map<PlayerPose, SVGElement>;
+  private enemySprites: Map<SentinelPose, SVGElement>;
   private shield: SVGElement;
   private warning: SVGElement;
   private projectiles: SVGElement[];
@@ -41,45 +44,30 @@ export class SideCombatScene {
 
   constructor(host: HTMLElement, private label: HTMLElement, character: 'elna' | 'towa') {
     host.classList.add('av-side-combat');
-    const cloak = character === 'elna' ? '#a5a5dc' : '#80c4ba';
+    host.style.setProperty('--battle-landscape', `url("${battleArt('celestial-terrace.webp')}")`);
+    host.dataset.character = character;
+    const sprites = (actor: string, poses: readonly string[], x: number) => poses.map(pose =>
+      `<image class="side-sprite" data-pose="${pose}" href="${battleArt(`${actor}-${pose}.webp`)}" x="${x}" y="0" width="260" height="247" opacity="${pose === 'idle' ? 1 : 0}"/>`).join('');
     host.innerHTML = `<div class="side-captions"><span class="side-mode">攻撃 · 1文字で1斬撃</span><span class="side-count">斬撃 0 ／ 反射 0</span></div>
       <svg class="side-vector" viewBox="0 0 800 260" aria-hidden="true">
-      <defs><linearGradient id="side-metal" x2="1" y2="1"><stop stop-color="#eaf4f9"/><stop offset=".45" stop-color="#aac3cd"/><stop offset="1" stop-color="#49677e"/></linearGradient>
-        <linearGradient id="side-blade" x2="1"><stop stop-color="#83d4ec"/><stop offset=".5" stop-color="#f8ffff"/><stop offset="1" stop-color="#b6daec"/></linearGradient></defs>
-      <g fill="none" stroke="#abcdd7" opacity=".2"><path d="M20 220H780M20 230H780M40 250L150 220M170 250L260 220M630 250L550 220M760 250L660 220"/><path d="M35 12V209M67 12V209M733 12V209M765 12V209" stroke-width="8"/><path d="M35 22Q400 -45 765 22" stroke-width="5"/></g>
-      <ellipse cx="163" cy="220" rx="70" ry="10" fill="#061827" opacity=".6"/><ellipse cx="635" cy="222" rx="68" ry="11" fill="#061827" opacity=".6"/>
-      <g class="side-player" stroke="#264252" stroke-width="2.5" stroke-linejoin="round">
-        <path d="M159 104Q110 77 73 99Q103 100 123 111Q82 106 83 129Q114 116 140 128Q112 130 117 143L159 128" fill="#e0e8f6"/>
-        <path d="M142 151L123 205 134 216 160 177 179 216 194 215 177 155" fill="#e6eaf7"/><path d="M121 204L112 219 137 222 143 211M180 210L180 223 204 220 194 211" fill="#7c729e"/>
-        <path d="M149 105L172 102 187 151 206 182Q168 197 128 185L145 144Z" fill="${cloak}"/><path d="M149 111L166 129 178 109 175 144 151 145Z" fill="#f4f4ff"/><path d="M139 151Q169 162 186 149" stroke="#dccb92" stroke-width="6"/>
-        <path d="M144 108L128 130 149 148 159 140 142 126 155 116" fill="${cloak}"/>
-        <path d="M149 67Q158 51 178 63L186 88 173 108 155 97Z" fill="#f4d4bb"/><path d="M142 79Q138 51 161 46Q191 44 191 80L177 75 175 63 168 83 155 66 151 92Z" fill="#eed6a0"/><path d="M179 84H184" stroke="#354965"/><path d="M153 99L176 105" stroke="#dccb92" stroke-width="4"/>
-        <g class="side-weapon"><path d="M179 112L194 135 214 129 210 119 195 122 189 105" fill="${cloak}"/><path d="M209 118L220 111 227 120 216 131" fill="#f4d4bb"/>
-          <path d="M216 118L267 38 280 21 279 44 227 126Z" fill="url(#side-blade)" stroke="#d9f8ff"/><path d="M207 119L232 132" stroke="#e6c787" stroke-width="6"/><path d="M215 128L207 141" stroke="#a99668" stroke-width="7"/></g>
-      </g>
-      <g class="side-enemy" transform="translate(463 1) scale(.93)" fill="url(#side-metal)" stroke="#bba678" stroke-width="2.5" stroke-linejoin="round">
-        <path d="M161 151L157 177 145 215 146 231 163 232 180 182 184 155M193 154L194 184 208 223 206 234 228 234 224 217 219 177 214 151"/>
-        <circle cx="170" cy="182" r="8" fill="#203f5e"/><circle cx="207" cy="182" r="8" fill="#203f5e"/>
-        <path d="M152 140L179 135 213 141 213 159 182 169 154 158" fill="#244d6c"/><path d="M146 61L159 55 210 55 223 69 214 106 204 135 165 135 149 105Z"/>
-        <path d="M160 91L182 114 204 91 200 134 166 134" fill="#234a68"/><path d="M158 58L181 72 209 58 203 81 182 103 162 81" fill="#f5eedb"/>
-        <path d="M167 15L186 8 203 17 200 43 184 55 169 42Z"/><path d="M173 31L185 36 198 30" fill="none" stroke="#76e0f5" stroke-width="4"/>
-        <path d="M159 62L139 58 126 70 136 87 153 80M211 64L233 58 245 70 233 90 217 80"/>
-        <path d="M137 82L113 98 109 123 97 130 84 114 98 89 122 72"/><circle cx="116" cy="103" r="7" fill="#244d6c"/>
-        <ellipse cx="94" cy="125" rx="27" ry="32" fill="#102d45" stroke-width="6"/><ellipse cx="94" cy="125" rx="20" ry="25" fill="none" stroke="#85e6f2" stroke-width="2"/>
-        <path d="M236 80L257 99 261 121 274 132 287 118 277 94 250 72"/><ellipse cx="273" cy="129" rx="27" ry="32" fill="#102d45" stroke-width="6"/>
-        <path d="M182 69L191 80 182 91 173 80Z" fill="#a3f1ff" stroke="#effaff"/>
-      </g>
+      <ellipse cx="175" cy="235" rx="62" ry="5" fill="#1a2c43" opacity=".24"/><ellipse cx="650" cy="235" rx="65" ry="5" fill="#1a2c43" opacity=".24"/>
+      <g class="side-player" data-pose="idle">${sprites(character, playerPoses, 22)}</g>
+      <g class="side-enemy" data-pose="idle">${sprites('sentinel', sentinelPoses, 482)}</g>
+      <g class="side-weapon" opacity="0"><path d="M247 90Q273 112 277 133" fill="none" stroke="#d1f7ff" stroke-width="2"/><path d="M253 105Q269 114 277 125" fill="none" stroke="#fff4cd" stroke-width="2"/></g>
       <ellipse class="side-warning" cx="551" cy="117" rx="34" ry="38" fill="#ffc76f15" stroke="#ffd083" stroke-width="2" stroke-dasharray="6 5" opacity="0"/>
       <g class="side-shield" opacity="0"><path class="side-guard-surface" d="M255 94Q312 132 255 187Q279 137 255 94Z" fill="#7ce9fc33" stroke="#a7f4ff" stroke-width="3"/><path class="side-guard-lines" d="M271 118L277 129 267 142 278 153" fill="none" stroke="#d0fbff" stroke-width="2"/>
         <path class="side-impact-lines" d="M252 116L274 129 251 142 271 157M248 130L237 122M250 150L239 157" fill="none" stroke="#ffb49a" stroke-width="4" opacity="0"/></g>
       <g fill="#ffc77d" stroke="#ffedc9">${Array.from({length: 4}, () => '<path class="side-threat" d="M-15 -4L0 -7 13 0 0 7 -15 4Z" opacity="0"/>').join('')}</g>
       <g class="side-key-pool">${Array.from({length: KEY_EFFECT_SLOTS}, () => `<g class="side-key-effect" opacity="0">${shape}</g>`).join('')}</g>
       <g class="side-outcome" transform="translate(400 26)" opacity="0"><rect x="-83" y="-17" width="166" height="34" rx="6" fill="#0b2134" stroke="#a7f4ff"/><text class="side-outcome-text" text-anchor="middle" y="5" font-size="16" fill="#d3faff"></text></g>
-      <text x="156" y="248" fill="#dce8f4" font-size="14" text-anchor="middle">${character === 'elna' ? 'エルナ' : 'トワ'}</text><text x="635" y="248" fill="#dce8f4" font-size="14" text-anchor="middle">守護機</text>
+      <g fill="#10263c" opacity=".88"><rect x="125" y="241" width="100" height="19" rx="8"/><rect x="600" y="241" width="100" height="19" rx="8"/></g>
+      <text x="175" y="255" fill="#eff9ff" font-size="14" text-anchor="middle">${character === 'elna' ? 'エルナ' : 'トワ'}</text><text x="650" y="255" fill="#eff9ff" font-size="14" text-anchor="middle">守護機</text>
       </svg>`;
     this.svg = host.querySelector('svg')!;
     const find = (name: string) => this.svg.querySelector<SVGElement>(`.side-${name}`)!;
     this.player = find('player'); this.weapon = find('weapon'); this.enemy = find('enemy'); this.shield = find('shield'); this.warning = find('warning');
+    this.playerSprites = new Map(playerPoses.map(pose => [pose, this.player.querySelector<SVGElement>(`[data-pose="${pose}"]`)!]));
+    this.enemySprites = new Map(sentinelPoses.map(pose => [pose, this.enemy.querySelector<SVGElement>(`[data-pose="${pose}"]`)!]));
     this.outcome = find('outcome'); this.outcomeText = find('outcome-text');
     this.projectiles = [...this.svg.querySelectorAll<SVGElement>('.side-threat')];
     this.nodes = [...this.svg.querySelectorAll<SVGElement>('.side-key-effect')].map(host => {
@@ -114,15 +102,20 @@ export class SideCombatScene {
     this.paint(this.finaleAt + ms, false); this.svg.dataset.mode = 'finale';
     this.mode.textContent = '決着 · 最後の文字まで届いた';
   }
+  private setPose<T extends string>(actor: SVGElement, sprites: Map<T, SVGElement>, pose: T) {
+    if (actor.dataset.pose === pose) return;
+    sprites.get(actor.dataset.pose as T)?.setAttribute('opacity', '0');
+    sprites.get(pose)!.setAttribute('opacity', '1');
+    actor.dataset.pose = pose;
+  }
   private paint(gameMs: number, defending: boolean) {
     this.lastTime = gameMs;
     const moving = this.options.motion && !this.options.low, intensity = Math.min(.65, this.options.intensity);
     const age = gameMs - this.lastKeyAt, recent = age >= 0 && age < KEY_EFFECT_MS;
-    const p = recent ? age / KEY_EFFECT_MS : 1;
-    const recoil = moving && recent && this.lastAction === 'attack' ? Math.sin(p * Math.PI) * 6 * intensity : 0;
-    this.enemy.setAttribute('transform', `translate(${463 + recoil} 1) scale(.93) rotate(${recoil / 3} 182 160)`);
-    this.weapon.setAttribute('transform', moving && recent ? `rotate(${(this.lastAction === 'attack' ? -40 + p * 105 : -12) * intensity} 184 113)` : '');
-    this.player.setAttribute('transform', moving && recent && this.lastAction === 'attack' ? `translate(${Math.sin(p * Math.PI) * 3 * intensity} 0)` : '');
+    const poses = combatPoses(age, this.lastAction, defending, moving);
+    this.setPose(this.player, this.playerSprites, poses.player);
+    this.setPose(this.enemy, this.enemySprites, poses.sentinel);
+    this.weapon.setAttribute('opacity', recent && this.lastAction === 'attack' ? String(.55 * intensity) : '0');
     this.svg.dataset.mode = defending ? 'defend' : 'attack';
     this.mode.textContent = defending ? '防御 · 1文字で1発を弾く' : '攻撃 · 1文字で1斬撃';
     if (this.duel) this.mode.textContent += ` · あと${Math.max(0, (this.duel.endsAt - gameMs) / 1000).toFixed(1)}秒${defending ? ` · 反撃あと${this.duel.remaining}回` : ''}`;
@@ -176,7 +169,7 @@ export class SideCombatScene {
       node.sparks.setAttribute('transform', `rotate(${effect.id * 47 % 360}) scale(${.7 + progress * 1.1})`);
       node.cut.setAttribute('opacity', attack && !this.options.low && latest ? '.16' : '0');
     }
-    const text = combo ? 'コンボ完成！ 最後の文字までつながった' : contact === 'impact' ? '被弾 · そのまま入力を続けよう' : contact === 'parry' ? this.duel ? 'パリィ完成！ 被弾分のガードも回復' : 'パリィ完成！ 弾き返し' : contact === 'guard' ? '部分ガード · 入力した分で1発を防いだ' : defending ? '敵の弾を1文字ずつ反射。金の枠の言葉を完成させよう' : '正しい1文字ごとに剣を振り、守護機へ斬撃';
+    const text = combo ? 'コンボ完成！ 最後の文字までつながった' : contact === 'impact' ? '被弾 · そのまま入力を続けよう' : contact === 'parry' ? this.duel ? 'パリィ完成！ 被弾分のガードも回復' : 'パリィ完成！ 弾き返し' : contact === 'guard' ? '部分ガード · 入力した分で1発を防いだ' : defending ? '敵の弾を1文字ずつ反射。金の枠の言葉を完成させよう' : '正しい1文字ごとに光の一撃を、守護機へ';
     if (text !== this.lastLabel) { this.label.textContent = text; this.lastLabel = text; }
   }
 }

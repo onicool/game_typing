@@ -375,12 +375,12 @@ function enterBoss() {
     : new CombatScene(host.querySelector('.av-combat-scene')!, $('seal-note'), kind => audio.combatCue(kind), `${chapter.definition.bossName} · 言葉で光の術を放つ`, false);
   main.querySelector('.av-battle')!.classList.toggle('av-side-battle', firstChapter);
   main.querySelector('.av-battle')!.classList.toggle('av-duel-battle', !!run!.combatTrial);
-  if (firstChapter) host.querySelector('.av-combat-scene')!.setAttribute('aria-label', '左の剣士と右の守護機。正しい1文字ごとに斬撃、または敵の弾を反射');
+  if (firstChapter) host.querySelector('.av-combat-scene')!.setAttribute('aria-label', '左の天使と右の人型守護機。正しい1文字ごとに斬撃、または敵の弾を反射');
   $('boss-hud').hidden = false; main.querySelector('.av-quest-title')!.textContent = chapter.definition.bossQuest;
   main.querySelector('.av-route-label')!.textContent = `${chapter.definition.title} · ボス戦`; $('speech').textContent = chapter.definition.opening(run!.character);
   $('quest-note').textContent = '金の枠の言葉を期限までに完成させる';
   if (run!.combatTrial) {
-    main.querySelector('.av-stage-name')!.textContent = '剣とことばの稽古';
+    main.querySelector('.av-stage-name')!.textContent = '光とことばの稽古';
     main.querySelector('.av-route-label')!.textContent = '横視点バトル · 教養タイピング';
     main.querySelector('.av-quest-title')!.textContent = '1文字ずつ、攻めて守る';
     $('quest-note').textContent = '文を完成してコンボ／パリィ。途中の入力も成果になる';

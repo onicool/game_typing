@@ -133,8 +133,10 @@
 #angel-ui-studio .av-side-battle .av-quest { display:none; }
 #angel-ui-studio .av-side-battle .av-speaker { display:none; }
 #angel-ui-studio .av-side-battle .av-obstacle-area { min-width:0; width:100%; }
-#angel-ui-studio .av-side-battle:has(#boss-hud) .av-combat-scene { width:100%; height:240px; border:1px solid #7fa0b344; border-radius:12px; background:linear-gradient(180deg,#0d22379c,#102d45bd); }
-#angel-ui-studio .side-captions { display:flex; justify-content:space-between; gap:12px; padding:9px 14px 0; min-height:26px; color:#d9f6fa; font:12px/1.5 var(--mono); }
+#angel-ui-studio .av-side-battle:has(#boss-hud) .av-combat-scene { width:100%; height:240px; border:1px solid #adcbd566; border-radius:12px; background:#10283f var(--battle-landscape) center 75% / cover no-repeat; }
+#angel-ui-studio .av-side-battle .av-landscape { opacity:0; }
+#angel-ui-studio .side-sprite { pointer-events:none; }
+#angel-ui-studio .side-captions { display:flex; justify-content:space-between; gap:12px; padding:9px 14px 0; min-height:26px; background:#10283f; color:#d9f6fa; font:12px/1.5 var(--mono); }
 #angel-ui-studio .side-count { color:#bdcddd; white-space:nowrap; }
 #angel-ui-studio .side-vector { display:block; width:100%; height:calc(100% - 36px); }
 #angel-ui-studio .av-side-battle:has(#boss-hud) .av-current-word { font-size:clamp(30px,2.6vw,38px); line-height:1.35; }
@@ -196,7 +198,7 @@
 #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-score { font-size:25px; margin:0; line-height:1.2; }
 #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-combo { margin-top:2px; }
 #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-arena { flex:none; max-height:none; padding:8px 24px 4px; }
-#angel-ui-studio .av-side-battle.av-duel-battle:has(#boss-hud) .av-combat-scene { height:clamp(140px,24vh,240px); background:linear-gradient(180deg,#0d2237eb,#102d45ed); }
+#angel-ui-studio .av-side-battle.av-duel-battle:has(#boss-hud) .av-combat-scene { height:clamp(140px,30vh,300px); }
 #angel-ui-studio .av-duel-battle:has(#boss-hud) .side-vector { height:calc(100% - 30px); }
 #angel-ui-studio .av-duel-battle:has(#boss-hud) .side-captions { min-height:26px; }
 #angel-ui-studio .av-duel-battle:has(#boss-hud) .av-obstacle-note { min-height:23px; margin:3px 0 0; }

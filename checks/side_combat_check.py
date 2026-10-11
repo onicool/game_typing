@@ -40,6 +40,8 @@ def state(page):
       effects:[...s.querySelectorAll('.side-key-effect')].filter(e=>+e.getAttribute('opacity')>0)
         .map(e=>({id:+e.dataset.id, action:e.dataset.action, opacity:+e.getAttribute('opacity')})),
       contact:s.querySelector('.side-shield').dataset.contact,
+      playerPose:s.querySelector('.side-player').dataset.pose,
+      enemyPose:s.querySelector('.side-enemy').dataset.pose,
       result:s.querySelector('.side-outcome').dataset.kind,
       label:s.querySelector('.side-outcome-text').textContent})''')
 
@@ -71,7 +73,41 @@ with sync_playwright() as p:
         if long:
             page.locator('[data-view="training"]').click()
         action(page, 'combat-long' if long else 'combat-practice')
+        page.evaluate('''async()=>{
+          const urls=[...document.querySelectorAll('.side-sprite')].map(e=>e.getAttribute('href'));
+          urls.push(getComputedStyle(document.querySelector('.av-combat-scene')).backgroundImage.slice(5,-2));
+          await Promise.all(urls.map(src=>new Promise((ok,no)=>{
+            const image=new Image();image.onload=()=>image.naturalWidth>0?ok():no(new Error(src));
+            image.onerror=()=>no(new Error(src));image.src=src;
+          })));
+        }''')
         return context, page
+
+    for character in ('elna', 'towa'):
+        c, page = fresh(virtual=True, settings=f"localStorage.setItem('icebreaker.angel.character',JSON.stringify('{character}'));")
+        assert page.locator('.av-combat-scene').get_attribute('data-character') == character
+        assert state(page)['playerPose'] == state(page)['enemyPose'] == 'idle'
+        art = page.locator('.side-sprite').evaluate_all('''images=>images.map(e=>({
+          href:e.getAttribute('href'), opacity:e.getAttribute('opacity'),
+          x:+e.getAttribute('x'), y:+e.getAttribute('y'), h:+e.getAttribute('height')}))''')
+        assert len(art) == 6 and sum(a['opacity'] == '1' for a in art) == 2
+        assert all(a['y'] >= 0 and a['y'] + a['h'] <= 260 for a in art)
+        page.keyboard.type(guide(page)[:1])
+        assert state(page)['playerPose'] == 'attack' and state(page)['enemyPose'] == 'hit'
+        page.screenshot(path=str(OUT/f'{character}-attack.png'))
+        page.clock.run_for(176)
+        assert state(page)['playerPose'] == state(page)['enemyPose'] == 'idle'
+        page.keyboard.type(guide(page)); page.clock.run_for(176)
+        assert state(page)['playerPose'] == 'guard' and state(page)['enemyPose'] == 'attack'
+        page.screenshot(path=str(OUT/f'{character}-guard.png'))
+        page.keyboard.type(guide(page))
+        assert state(page)['result'] == 'parry' and state(page)['playerPose'] == 'guard'
+        page.screenshot(path=str(OUT/f'{character}-parry.png'))
+        assert page.locator('.side-player').get_attribute('transform') is None
+        assert page.locator('.side-enemy').get_attribute('transform') is None
+        CASES.append({'case':character+'-loaded-illustrations-immediate-attack-guard-parry', 'images':len(art)})
+        c.close()
+    print('Both illustrated characters and pose changes passed', flush=True)
 
     layouts = []
     for size in [(1366,768), (800,600), (390,844), (640,480), (320,568)]:
@@ -207,7 +243,8 @@ with sync_playwright() as p:
         page.keyboard.type(guide(page)[:80])
         s = state(page)
         assert s['accepted'] == 80 and len(s['effects']) == 64
-        assert page.locator('.side-player').get_attribute('transform') == ''
+        assert page.locator('.side-player').get_attribute('transform') is None
+        assert s['playerPose'] == s['enemyPose'] == 'idle'
         page.clock.run_for(300)
         assert not state(page)['effects']
         CASES.append({'case':kind+'-static-input-feedback-expiry'})
