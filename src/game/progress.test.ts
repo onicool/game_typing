@@ -28,6 +28,8 @@ describe('versioned route progress', () => {
     for (const value of [null, [], {}, { version: 2, places: {} }, { version: 1, places: [] }]) expect(isProgress(value)).toBe(false);
     for (const edit of [
       { routeVersion: 0 }, { routeVersion: 1.5 }, { routeVersion: Infinity }, { legacy: {} },
+      { legacyVersion: 1 }, { legacy: emptyRecord(), legacyVersion: 0 },
+      { legacy: emptyRecord(), legacyVersion: 1 }, { legacy: emptyRecord(), legacyVersion: NaN },
       { current: { ...emptyRecord(), bestScore: -1 } }, { current: { ...emptyRecord(), bestScore: NaN } },
       { current: { ...emptyRecord(), bestTimeMs: Infinity } }, { current: { ...emptyRecord(), bestRank: 'SS' } },
       { current: { ...emptyRecord(), stars: [true, true] } }, { current: { ...emptyRecord(), stars: [true, true, 1] } },
@@ -39,6 +41,7 @@ describe('versioned route progress', () => {
     const upgraded = migrateProgress(old, { heaven: 2, town: 1 });
     expect(upgraded.places.heaven.current).toEqual(emptyRecord());
     expect(upgraded.places.heaven.legacy).toEqual(old.places.heaven.current);
+    expect(upgraded.places.heaven.legacyVersion).toBe(1);
     expect(upgraded.places.town.routeVersion).toBe(1);
     expect(old).toEqual(copy);
     expect(migrateProgress(upgraded, { heaven: 1 })).toEqual(upgraded);
@@ -66,6 +69,38 @@ describe('versioned route progress', () => {
     expect(updated.places.heaven.routeVersion).toBe(2);
     expect(updated.places.heaven.legacy!.bestScore).toBe(2000);
     expect(updated.places.heaven.legacy!.bestTimeMs).toBe(10000);
+  });
+  it('keeps version two legacy separate from a version one tab after two upgrades', () => {
+    const old = cleared();
+    const second = recordResult(migrateProgress(old, { heaven: 2 }), { ...result, routeVersion: 2, score: 100, elapsedMs: 90000 });
+    const third = migrateProgress(second, { heaven: 3 });
+    for (const merged of [mergeProgress(third, old), mergeProgress(old, third)]) {
+      expect(merged.places.heaven.current).toEqual(emptyRecord());
+      expect(merged.places.heaven.legacy).toEqual(second.places.heaven.current);
+      expect(merged.places.heaven.legacyVersion).toBe(2);
+      expect(isProgress(merged)).toBe(true);
+    }
+  });
+  it('retains an unversioned legacy snapshot without mixing in an older tab', () => {
+    const old = cleared(), unknown = migrateProgress(old, { heaven: 3 });
+    delete unknown.places.heaven.legacyVersion;
+    unknown.places.heaven.legacy!.bestScore = 50;
+    expect(isProgress(unknown)).toBe(true);
+    expect(mergeProgress(unknown, old).places.heaven.legacy!.bestScore).toBe(50);
+    expect(mergeProgress(old, unknown)).toEqual(mergeProgress(unknown, old));
+  });
+  it('merges same-version legacy bests and keeps the most recent identified legacy', () => {
+    const a = migrateProgress(cleared(), { heaven: 3 });
+    const b = structuredClone(a); b.places.heaven.legacy!.bestScore = 2000;
+    expect(mergeProgress(a, b).places.heaven.legacy!.bestScore).toBe(2000);
+    const second = recordResult(emptyProgress(), { ...result, routeVersion: 2, score: 100 });
+    const newer = migrateProgress(second, { heaven: 3 });
+    for (const merged of [mergeProgress(a, newer), mergeProgress(newer, a)]) {
+      expect(merged.places.heaven.legacyVersion).toBe(2);
+      expect(merged.places.heaven.legacy!.bestScore).toBe(100);
+    }
+    const detached = mergeProgress(a, newer); detached.places.heaven.legacy!.bestScore = 999;
+    expect(newer.places.heaven.legacy!.bestScore).toBe(100);
   });
   it('ignores quits and records boss retry clears without a whole-chapter score or time', () => {
     expect(recordResult(cleared(), { ...result, completed: false, score: 9999 })).toEqual(cleared());

@@ -7,7 +7,13 @@ export interface PlaceRecord {
   bestTimeMs: number | null;
   stars: [boolean, boolean, boolean];
 }
-export interface PlaceProgress { routeVersion: number; current: PlaceRecord; legacy?: PlaceRecord }
+export interface PlaceProgress {
+  routeVersion: number;
+  current: PlaceRecord;
+  legacy?: PlaceRecord;
+  /** Missing for older saves whose legacy route cannot be identified. */
+  legacyVersion?: number;
+}
 export interface Progress { version: 1; places: Record<string, PlaceProgress> }
 export const ROUTE_VERSION = 1;
 export const emptyRecord = (): PlaceRecord => ({ cleared: false, bestScore: 0, bestRank: null, bestTimeMs: null, stars: [false, false, false] });
@@ -31,7 +37,10 @@ function isRecord(v: unknown): v is PlaceRecord {
 export function isProgress(v: unknown): v is Progress {
   return object(v) && v.version === 1 && object(v.places) && Object.values(v.places).every(p =>
     object(p) && nonnegative(p.routeVersion) && Number.isInteger(p.routeVersion) && p.routeVersion > 0
-    && isRecord(p.current) && (p.legacy === undefined || isRecord(p.legacy)));
+    && isRecord(p.current) && (p.legacy === undefined || isRecord(p.legacy))
+    && (p.legacyVersion === undefined || (typeof p.legacyVersion === 'number'
+      && Number.isInteger(p.legacyVersion) && p.legacyVersion > 0
+      && p.legacyVersion < p.routeVersion && p.legacy !== undefined)));
 }
 const ranks: Rank[] = ['S', 'A', 'B', 'C'];
 function mergeRecord(a: PlaceRecord, b: PlaceRecord): PlaceRecord {
@@ -52,12 +61,22 @@ export function mergeProgress(a: Progress, b: Progress): Progress {
     const left = a.places[key], right = b.places[key];
     if (!left || !right) return [key, structuredClone(left ?? right)];
     if (left.routeVersion === right.routeVersion) {
-      const legacy = left.legacy && right.legacy ? mergeRecord(left.legacy, right.legacy) : left.legacy ?? right.legacy;
-      return [key, { routeVersion: left.routeVersion, current: mergeRecord(left.current, right.current), ...(legacy ? { legacy: structuredClone(legacy) } : {}) }];
+      // Only identified records from the same old route may share bests.
+      const source = !left.legacy ? right : !right.legacy ? left
+        : (right.legacyVersion ?? 0) > (left.legacyVersion ?? 0) ? right : left;
+      const legacy = left.legacy && right.legacy && left.legacyVersion !== undefined
+        && left.legacyVersion === right.legacyVersion ? mergeRecord(left.legacy, right.legacy) : source.legacy;
+      return [key, { routeVersion: left.routeVersion, current: mergeRecord(left.current, right.current),
+        ...(legacy ? { legacy: structuredClone(legacy), ...(source.legacyVersion === undefined ? {} : { legacyVersion: source.legacyVersion }) } : {}) }];
     }
     const [newer, older] = left.routeVersion > right.routeVersion ? [left, right] : [right, left];
-    return [key, { routeVersion: newer.routeVersion, current: structuredClone(newer.current),
-      legacy: mergeRecord(newer.legacy ?? emptyRecord(), older.current) }];
+    // Retain an existing snapshot when its provenance is unknown or different.
+    const legacy = newer.legacy
+      ? newer.legacyVersion === older.routeVersion ? mergeRecord(newer.legacy, older.current) : newer.legacy
+      : older.current;
+    const legacyVersion = newer.legacy ? newer.legacyVersion : older.routeVersion;
+    return [key, { routeVersion: newer.routeVersion, current: structuredClone(newer.current), legacy: structuredClone(legacy),
+      ...(legacyVersion === undefined ? {} : { legacyVersion }) }];
   }));
   return { version: 1, places };
 }
@@ -68,7 +87,7 @@ export function migrateProgress(progress: Progress, versions: Record<string, num
   for (const [key, version] of Object.entries(versions)) {
     const p = next.places[key];
     if (!p) next.places[key] = { routeVersion: version, current: emptyRecord() };
-    else if (version > p.routeVersion) next.places[key] = { routeVersion: version, current: emptyRecord(), legacy: p.current };
+    else if (version > p.routeVersion) next.places[key] = { routeVersion: version, current: emptyRecord(), legacy: p.current, legacyVersion: p.routeVersion };
   }
   return next;
 }
