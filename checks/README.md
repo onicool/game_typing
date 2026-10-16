@@ -1,14 +1,15 @@
-# 天使版のブラウザ検証
+# ブラウザ検証
 
-通常の確認は、既存のNode依存だけで実行できます。
+現行のタイトル・横視点稽古・動作・実時計を検証します。章進行・保存・入力判定などのユニットテストは `src/` にあります。
 
 ```sh
 npm test -- --maxWorkers=1
 npm run build
 ```
 
-追加のブラウザ検証にはPython PlaywrightとChromium系のブラウザを使います。
-プロジェクトのルートで次の準備を行います。
+## ブラウザの準備
+
+Python Playwrightと既存のChromium系ブラウザを使います。初回だけプロジェクトのルートで準備します。
 
 ```sh
 python3 -m venv .venv
@@ -16,49 +17,45 @@ python3 -m venv .venv
 ```
 
 [Playwrightの公式導入手順](https://playwright.dev/python/docs/library)も参照できます。
-これらはアプリの依存ではありません。検証スクリプトはブラウザをダウンロードしません。
-Macではインストール済みのGoogle Chrome、Linuxではインストール済みのChromiumを自動選択します。
-それ以外はPlaywrightの既存のChromiumを使います。
-別の実行体は `CHROMIUM_EXECUTABLE` にパスを指定できます。
+検証スクリプトはブラウザをダウンロードしません。MacではGoogle Chrome、LinuxではChromium、
+それ以外はPlaywrightの既存Chromiumを選択します。別の実行体は `CHROMIUM_EXECUTABLE` で指定します。
 
-別の端末で本番プレビューを起動:
+## 現行の検証
+
+別の端末で本番プレビューを起動します。
 
 ```sh
 npm run preview -- --host 127.0.0.1 --port 5180 --strictPort
 ```
 
-検証は順番に実行し、出力先は毎回まだ存在しない新しいフォルダを指定します。
+次の検証は順番に実行し、出力先には毎回まだ存在しないフォルダを指定します。
 
 ```sh
 .venv/bin/python checks/title_screen_check.py http://127.0.0.1:5180 /tmp/title-screen-next
-.venv/bin/python checks/angel_integration_check.py http://127.0.0.1:5180 /tmp/angel-integration-next
-.venv/bin/python checks/angel_finish_check.py http://127.0.0.1:5180 /tmp/angel-finish-next
-.venv/bin/python checks/angel_real_timer_check.py http://127.0.0.1:5180 /tmp/angel-timer-next
 .venv/bin/python checks/side_combat_check.py http://127.0.0.1:5180 /tmp/side-combat-next
 .venv/bin/python checks/battle_motion_check.py http://127.0.0.1:5180 /tmp/battle-motion-next
+.venv/bin/python checks/angel_real_timer_check.py http://127.0.0.1:5180 /tmp/angel-timer-next
 ```
 
 | 検証 | 対象 |
 | --- | --- |
-| `title_screen_check.py` | 打天使のタイトル画面、Space・ボタンの横視点開始、保存済み天使との優先順、入力・BGM・停止・タイトルへの戻り・記録保持 |
-| `angel_integration_check.py` | 7土地、入力境界、停止、保存失敗・回復・遅い完了、計測・長文・分析、画像・音声故障 |
-| `angel_finish_check.py` | 4長文、5つの小画面サイズ、次の土地・最後の土地、設定・停止の往復と中断保存 |
-| `angel_real_timer_check.py` | 実時計での60秒計測、自動終了、キーイベントとメタ情報の保存 |
-| `side_combat_check.py` | 現在の横視点稽古。両キャラクターの透過画像読込・即時の攻防姿勢、短文・長文×5画面サイズ、100文字×3回の固定64枠・全打鍵保存、被弾の形・訂正後のパリィ、停止・仮想非表示時間、低負荷・演出オフ、独立BGMと7音源のブラウザ復号・ループ |
-| `battle_motion_check.py` | 両キャラの4通常攻撃＋2コンボ、全6コマと別の防御・パリィ、敵の3攻撃・被弾・反射、素材取得失敗と低負荷時の入力継続 |
+| `title_screen_check.py` | タイトル、Space・ボタン開始、保存済み天使との優先順、入力・BGM・停止・タイトルへの戻り・記録保持 |
+| `side_combat_check.py` | 両キャラ、短文・長文と5画面サイズ、高速入力の固定64枠・全打鍵保存、部分ガード・パリィ、停止・非表示、演出・低負荷、独立BGMと7音源の復号・ループ |
+| `battle_motion_check.py` | 両キャラの4通常攻撃＋2コンボと6コマ、敵3攻撃・被弾・反射、素材取得失敗・低負荷時の入力継続 |
+| `angel_real_timer_check.py` | 実時計での60秒計測、自動終了、打鍵とメタ情報の保存 |
 
-`stage1_combat_check.py` と `stage1_frame_cost_check.py` は以前の術式の描画構造を検査するための保存版です。
-横視点へ変わった現在の第1ステージには `side_combat_check.py` を使ってください。
-他の章・計測向けの既存スクリプトも、対象となる辞書や章の仕様を変更した場合は期待値の確認が必要です。
+人工データ、新しいブラウザコンテキスト、固有のQAデータベースだけを使い、既存のユーザープロファイルは読みません。
+結果のJSONと画像は指定先へ保存します。終了後は検証ブラウザを閉じ、プレビューはCtrl-Cで停止します。
+`TITLE_CHECK_HEADFUL=1` でタイトル検証のブラウザを表示できます。
 
-人工データと新しいブラウザコンテキスト、固有のQAデータベースだけを使用します。
-既存のユーザープロファイルは読み取りません。スクリーンショットとJSONは出力先に保存します。
-終了後は検証ブラウザを閉じ、プレビューは起動端末のCtrl-Cで停止します。
+## 旧仕様の検証
 
-以前のステージ1攻防演出の検証結果は [ZIP統合確認](../docs/review/zip-integration-edd518b.md) にあります。
-過去の [クラウド統合確認](../docs/review/archive/angel-integration.md)、
-[Mac確認](../docs/review/archive/local-mac-20261006.md)、
-[旧版削除の確認](../docs/review/archive/cleanup-20261006.md) は当時の記録です。
-自動ブラウザ検証は実物のIME、読み上げソフト、物理入力・描画遅延を測りません。
+次の4本は [archive/](archive/README.md) に保管しました。現行版の回帰検証には使いません。
 
-タイトル検証は `TITLE_CHECK_HEADFUL=1` を付けると表示ありのブラウザで実行できます。既存の戦闘検証はタイトルの「天使を選ぶ」から選択画面へ進みます。
+- `angel_integration_check.py`、`angel_finish_check.py`: 全土地が解放済みで各5語、会話・ボスなしという旧仕様。
+- `stage1_combat_check.py`、`stage1_frame_cost_check.py`: 旧ステージ1のSVG構造と固定周期の攻防演出。
+
+全7章の会話・ボス・解放を含むブラウザ統合検証への更新は未実施です。
+過去の実行結果は [確認資料の保管先](../docs/review/archive/zip-integration-edd518b.md) にあります。
+現行の確認結果は [整理・検証記録](../docs/review/cleanup-20261016.md) を参照してください。
+実物IME・読み上げ・物理入力遅延・GPU性能は自動検証の対象外です。

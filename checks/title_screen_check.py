@@ -117,7 +117,7 @@ with sync_playwright() as p:
 
     for view,expected in [('journey','旅の地図'),('training','言葉を磨く'),('records','練習の記録')]:
         c,page=fresh();page.locator(f'.av-title-menu [data-view="{view}"]').click()
-        assert page.locator('h1').inner_text()==expected
+        assert page.get_by_role('heading', name=expected, exact=True).is_visible()
         page.locator('.av-chrome [data-view="title"]').click()
         assert page.locator('#title-name').is_visible()
         CASES.append({'case':'title-menu-'+view+'-and-return'});c.close()

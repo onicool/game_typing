@@ -91,3 +91,31 @@ npm run build
 ブラウザ検証の準備と実行方法は [checks/README.md](checks/README.md) にあります。
 現在の横視点稽古は `side_combat_check.py` で小画面・高速入力・攻防・保存・BGMを確認できます。
 `battle_motion_check.py` は両キャラの6攻撃、敵3攻撃、全6コマ、読込失敗時の継続を実ブラウザで確認します。
+
+## 保存とフォルダ構成
+
+入力記録はこの端末・ブラウザ・オリジンのIndexedDBに保存します。
+保存失敗時はページ内に一時保持し、次の保存で再試行します。保存前にページを閉じると一時保持分は失われます。
+選択・設定・章の成果はlocalStorageに保存します。既存記録を読むため `icebreaker-stats` と `icebreaker.*` の識別子を継続しています。
+章の版が変わった成果は旧版として保持し、新版の解放や自己ベストと混ぜません。入力途中からの再開は未実装です。
+
+| 場所 | 内容 |
+| --- | --- |
+| `src/main.ts`、`src/style.css` | 画面の切替・入力・結果の統合 |
+| `src/game/`、`src/engine/` | 章・攻防・スコア・進捗・ローマ字判定 |
+| `src/content/` | 7章の会話・出題、教養の出典、辞書と素材一覧 |
+| `src/fx/`、`src/ui/` | 攻防演出・姿勢・BGM・効果音、タイトル・分析・ダイアログ |
+| `src/stats/`、`src/storage/` | 記録・分析・弱点練習・設定保存 |
+| `public/` | 配信用の画像・音源と出典・利用条件 |
+| `concept/` | 世界観・原画・生成時の記録 |
+| `checks/` | 現行のブラウザ検証と共通処理 |
+| `checks/archive/`、`docs/review/archive/` | 旧仕様の検証スクリプトと過去の確認資料 |
+| `docs/` | 実装構成・制作予定・当初の設計・今回の確認結果 |
+
+`dist/` はビルド生成物、`node_modules/` と `.venv/` はローカル依存で、Git管理対象外です。
+
+- [実装構成](docs/ARCHITECTURE.md)
+- [制作予定と未確認範囲](docs/ROADMAP.md)
+- [当初のゲーム体験設計書](docs/GAME_DESIGN.md)
+- [世界観と素材の資料](concept/README.md)
+- [確認結果と整理記録](docs/review/README.md)
